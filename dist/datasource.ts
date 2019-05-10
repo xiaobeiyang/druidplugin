@@ -5,7 +5,7 @@ import moment from 'moment';
 import * as dateMath from 'app/core/utils/datemath';
 import * as Druid from 'druid.d'
 
-const DRUID_DATASOURCE_PATH = '/druid/v2/datasources';
+const DRUID_DATASOURCE_PATH = '/druid/v2/datasources/';
 
 export default class DruidDatasource {
   id: number;
@@ -33,7 +33,8 @@ export default class DruidDatasource {
     "selector": ['value'],
     "regex": ['pattern'],
     "javascript": ['function'],
-    "search": []
+    "search": [ 'query.type', 'query.value' ],
+    "in": ['values']
   };
 
 
@@ -86,7 +87,6 @@ export default class DruidDatasource {
     let filters = target.filters;
     let aggregators = target.aggregators.map(this.splitCardinalityFields);
     let postAggregators = target.postAggregators;
-    let groupBy = _.map(target.groupBy, (e) => { return this.templateSrv.replace(e) });
     let limitSpec = null;
     let metricNames = this.getMetricNames(aggregators, postAggregators);
     let intervals = this.getQueryIntervals(from, to);
@@ -109,6 +109,7 @@ export default class DruidDatasource {
         });
     }
     else if (target.queryType === 'groupBy') {
+      let groupBy = _.map(target.groupBy, (e) => { return this.templateSrv.replace(e) });
       limitSpec = this.getLimitSpec(target.limit, target.orderBy);
       promise = this.groupByQuery(datasource, intervals, granularity, filters, aggregators, postAggregators, groupBy, limitSpec)
         .then(response => {
@@ -590,8 +591,12 @@ export default class DruidDatasource {
 
   replaceTemplateValues(obj, attrList) {
     const substitutedVals = attrList.map(attr => {
-      return this.templateSrv.replace(obj[attr]);
+      if (obj.type == 'in' && attr == 'values') {
+        return _.split((this.templateSrv.replace(_.get(obj, attr), '{}', 'csv')), ',');
+      } else {
+        return this.templateSrv.replace(_.get(obj, attr));
+      }
     });
-    return _.assign(_.clone(obj, true), _.zipObject(attrList, substitutedVals));
+    return _.assign(_.clone(obj, true), _.zipObjectDeep(attrList, substitutedVals));
   }
 }

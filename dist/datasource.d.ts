@@ -1,4 +1,3 @@
-/// <reference path="../node_modules/grafana-sdk-mocks/app/headers/common.d.ts" />
 import * as Druid from 'druid.d';
 export default class DruidDatasource {
     id: number;
@@ -15,7 +14,8 @@ export default class DruidDatasource {
         "selector": string[];
         "regex": string[];
         "javascript": string[];
-        "search": any[];
+        "search": string[];
+        "in": string[];
     };
     constructor(instanceSettings: any, $q: any, backendSrv: any, templateSrv: any);
     query(options: any): any;

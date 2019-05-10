@@ -1,4 +1,3 @@
-/// <reference path="../node_modules/grafana-sdk-mocks/app/headers/common.d.ts" />
 import { QueryCtrl } from 'app/plugins/sdk';
 import './css/query_editor.css!';
 export declare class DruidQueryCtrl extends QueryCtrl {
@@ -33,6 +32,8 @@ export declare class DruidQueryCtrl extends QueryCtrl {
         "selector": any;
         "regex": any;
         "javascript": any;
+        "search": any;
+        "in": any;
     };
     aggregatorValidators: {
         "count": (target: any) => string;
@@ -101,6 +102,8 @@ export declare class DruidQueryCtrl extends QueryCtrl {
     validateSelectorFilter(target: any): "Must provide dimension name for selector filter." | "Must provide dimension value for selector filter.";
     validateJavascriptFilter(target: any): "Must provide dimension name for javascript filter." | "Must provide func value for javascript filter.";
     validateRegexFilter(target: any): "Must provide dimension name for regex filter." | "Must provide pattern for regex filter.";
+    validateInFilter(target: any): "Must provide dimension name for in filter." | "Must provide dimension values for in filter.";
+    validateSearchFilter(target: any): "Must provide dimension name for search filter." | "Must provide query for search filter." | "Must provide query type for search filter." | "Must provide query value for search filter.";
     validateCountAggregator(target: any): string;
     validateCardinalityAggregator(type: any, target: any): string;
     validateSimpleAggregator(type: any, target: any): string;

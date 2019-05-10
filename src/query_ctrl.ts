@@ -37,7 +37,9 @@ export class DruidQueryCtrl extends QueryCtrl {
   filterValidators = {
     "selector": this.validateSelectorFilter.bind(this),
     "regex": this.validateRegexFilter.bind(this),
-    "javascript": this.validateJavascriptFilter.bind(this)
+    "javascript": this.validateJavascriptFilter.bind(this),
+    "search": this.validateSearchFilter.bind(this),
+    "in": this.validateInFilter.bind(this),
   };
   aggregatorValidators = {
     "count": this.validateCountAggregator,
@@ -387,6 +389,7 @@ export class DruidQueryCtrl extends QueryCtrl {
     if (target.groupBy && !Array.isArray(target.groupBy)) {
       target.groupBy = target.groupBy.split(",");
     }
+    target.groupBy = _.filter(target.groupBy, function(o) { return typeof o === 'string'; });
     if (!target.groupBy) {
       errs.groupBy = "Must list dimensions to group by.";
       return false;
@@ -447,6 +450,32 @@ export class DruidQueryCtrl extends QueryCtrl {
     }
     if (!target.currentFilter.pattern) {
       return "Must provide pattern for regex filter.";
+    }
+    return null;
+  }
+
+  validateInFilter(target) {
+    if (!target.currentFilter.dimension) {
+        return "Must provide dimension name for in filter.";
+    }
+    if (!target.currentFilter.values) {
+        return "Must provide dimension values for in filter.";
+    }
+    return null;
+  }
+
+  validateSearchFilter(target) {
+    if (!target.currentFilter.dimension) {
+        return "Must provide dimension name for search filter.";
+    }
+    if (!target.currentFilter.query) {
+        return "Must provide query for search filter.";
+    }
+    if (!target.currentFilter.query.type) {
+        return "Must provide query type for search filter.";
+    }
+    if (!target.currentFilter.query.value) {
+        return "Must provide query value for search filter.";
     }
     return null;
   }

@@ -15,7 +15,7 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
             }
         ],
         execute: function () {
-            DRUID_DATASOURCE_PATH = '/druid/v2/datasources';
+            DRUID_DATASOURCE_PATH = '/druid/v2/datasources/';
             DruidDatasource = (function () {
                 function DruidDatasource(instanceSettings, $q, backendSrv, templateSrv) {
                     this.GRANULARITIES = [
@@ -34,7 +34,8 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         "selector": ['value'],
                         "regex": ['pattern'],
                         "javascript": ['function'],
-                        "search": []
+                        "search": ['query.type', 'query.value'],
+                        "in": ['values']
                     };
                     this.name = instanceSettings.name;
                     this.id = instanceSettings.id;
@@ -79,7 +80,6 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                     var filters = target.filters;
                     var aggregators = target.aggregators.map(this.splitCardinalityFields);
                     var postAggregators = target.postAggregators;
-                    var groupBy = lodash_1.default.map(target.groupBy, function (e) { return _this.templateSrv.replace(e); });
                     var limitSpec = null;
                     var metricNames = this.getMetricNames(aggregators, postAggregators);
                     var intervals = this.getQueryIntervals(from, to);
@@ -100,10 +100,11 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         });
                     }
                     else if (target.queryType === 'groupBy') {
+                        var groupBy_1 = lodash_1.default.map(target.groupBy, function (e) { return _this.templateSrv.replace(e); });
                         limitSpec = this.getLimitSpec(target.limit, target.orderBy);
-                        promise = this.groupByQuery(datasource, intervals, granularity, filters, aggregators, postAggregators, groupBy, limitSpec)
+                        promise = this.groupByQuery(datasource, intervals, granularity, filters, aggregators, postAggregators, groupBy_1, limitSpec)
                             .then(function (response) {
-                            return _this.convertGroupByData(response.data, groupBy, metricNames);
+                            return _this.convertGroupByData(response.data, groupBy_1, metricNames);
                         });
                     }
                     else if (target.queryType === 'select') {
@@ -449,9 +450,14 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                 DruidDatasource.prototype.replaceTemplateValues = function (obj, attrList) {
                     var _this = this;
                     var substitutedVals = attrList.map(function (attr) {
-                        return _this.templateSrv.replace(obj[attr]);
+                        if (obj.type == 'in' && attr == 'values') {
+                            return lodash_1.default.split((_this.templateSrv.replace(lodash_1.default.get(obj, attr), '{}', 'csv')), ',');
+                        }
+                        else {
+                            return _this.templateSrv.replace(lodash_1.default.get(obj, attr));
+                        }
                     });
-                    return lodash_1.default.assign(lodash_1.default.clone(obj, true), lodash_1.default.zipObject(attrList, substitutedVals));
+                    return lodash_1.default.assign(lodash_1.default.clone(obj, true), lodash_1.default.zipObjectDeep(attrList, substitutedVals));
                 };
                 return DruidDatasource;
             }());
