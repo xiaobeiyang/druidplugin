@@ -1,4 +1,9 @@
 import * as Druid from 'druid.d';
+interface Table {
+    type: string;
+    columns: any[];
+    rows: any[];
+}
 export default class DruidDatasource {
     id: number;
     name: string;
@@ -40,13 +45,22 @@ export default class DruidDatasource {
     getQueryIntervals(from: any, to: any): string[];
     getMetricNames(aggregators: any, postAggregators: any): any;
     formatTimestamp(ts: any): number;
-    convertTimeSeriesData(md: any, metrics: any): any;
+    convertTimeSeriesData(md: any, metrics: any, targetFormat: any): any;
+    convertTimeSeriesDataToTable(md: any, metrics: any): Table;
+    convertTimeSeriesDataToTimeSeries(md: any, metrics: any): any;
     getGroupName(groupBy: any, metric: any): any;
-    convertTopNData(md: any, dimension: any, metric: any): any;
-    convertGroupByData(md: any, groupBy: any, metrics: any): any;
-    convertSelectData(data: any): any;
+    convertTopNData(md: any, dimension: any, metric: any, targetFormat: any): any;
+    convertTopNDataToTable(md: any, dimension: any, metric: any): Table;
+    convertTopNDataToTimeSeries(md: any, dimension: any, metric: any): any;
+    convertGroupByData(md: any, groupBy: any, metrics: any, resultFormat: any): any;
+    convertGroupByDataToTable(md: any, groupBy: any, metrics: any): Table;
+    convertGroupByDataToTimeSeries(md: any, groupBy: any, metrics: any): any;
+    convertSelectData(data: any, targetFormat: any): any;
+    convertSelectDataToTable(data: any): Table;
+    convertSelectDataToTimeSeries(data: any): any;
     dateToMoment(date: any, roundUp: any): any;
     computeGranularity(from: any, to: any, maxDataPoints: any): any;
     roundUpStartTime(from: any, granularity: any): any;
     replaceTemplateValues(obj: any, attrList: any): any;
 }
+export {};

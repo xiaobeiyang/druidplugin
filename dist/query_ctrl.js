@@ -78,6 +78,10 @@ System.register(["lodash", "app/plugins/sdk", "./css/query_editor.css!"], functi
                     _this.postAggregatorTypes = lodash_1.default.keys(_this.postAggregatorValidators);
                     _this.arithmeticPostAggregator = lodash_1.default.keys(_this.arithmeticPostAggregatorFns);
                     _this.customGranularity = _this.customGranularities;
+                    _this.resultFormats = [
+                        { text: 'Time series', value: 'time_series' },
+                        { text: 'Table', value: 'table' }
+                    ];
                     _this.errors = _this.validateTarget();
                     if (!_this.target.currentFilter) {
                         _this.clearCurrentFilter();

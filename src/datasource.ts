@@ -7,6 +7,12 @@ import * as Druid from 'druid.d'
 
 const DRUID_DATASOURCE_PATH = '/druid/v2/datasources/';
 
+interface Table {
+    type: string;
+    columns: any[];
+    rows: any[];
+  }
+
 export default class DruidDatasource {
   id: number;
   name: string;
@@ -55,7 +61,6 @@ export default class DruidDatasource {
   query(options) {
     const from = this.dateToMoment(options.range.from, false);
     const to = this.dateToMoment(options.range.to, true);
-
     let promises = options.targets.map(target => {
       if (target.hide === true || _.isEmpty(target.druidDS) || (_.isEmpty(target.aggregators) && target.queryType !== "select")) {
         const d = this.q.defer();
@@ -105,7 +110,7 @@ export default class DruidDatasource {
       let dimension = this.templateSrv.replace(target.dimension);
       promise = this.topNQuery(datasource, intervals, granularity, filters, aggregators, postAggregators, threshold, metric, dimension)
         .then(response => {
-          return this.convertTopNData(response.data, dimension, metric);
+          return this.convertTopNData(response.data, dimension, metric, target.resultFormat);
         });
     }
     else if (target.queryType === 'groupBy') {
@@ -113,19 +118,19 @@ export default class DruidDatasource {
       limitSpec = this.getLimitSpec(target.limit, target.orderBy);
       promise = this.groupByQuery(datasource, intervals, granularity, filters, aggregators, postAggregators, groupBy, limitSpec)
         .then(response => {
-          return this.convertGroupByData(response.data, groupBy, metricNames);
+          return this.convertGroupByData(response.data, groupBy, metricNames, target.resultFormat);
         });
     }
     else if (target.queryType === 'select') {
       promise = this.selectQuery(datasource, intervals, granularity, selectDimensions, selectMetrics, filters, selectThreshold);
       return promise.then(response => {
-        return this.convertSelectData(response.data);
+        return this.convertSelectData(response.data, target.resultFormat);
       });
     }
     else {
       promise = this.timeSeriesQuery(datasource, intervals, granularity, filters, aggregators, postAggregators)
         .then(response => {
-          return this.convertTimeSeriesData(response.data, metricNames);
+          return this.convertTimeSeriesData(response.data, metricNames, target.resultFormat);
         });
     }
     /*
@@ -146,6 +151,14 @@ export default class DruidDatasource {
     */
     return promise.then(metrics => {
       let fromMs = this.formatTimestamp(from);
+      if (target.resultFormat === 'table') {
+        metrics.rows.forEach(row => {
+            if (row[0] < fromMs) {
+                row[0] = fromMs;
+            }
+        });
+        return metrics;
+      }
       metrics.forEach(metric => {
         if (!_.isEmpty(metric.datapoints[0]) && metric.datapoints[0][1] < fromMs) {
           metric.datapoints[0][1] = fromMs;
@@ -358,7 +371,31 @@ export default class DruidDatasource {
     return moment(ts).format('X') * 1000;
   }
 
-  convertTimeSeriesData(md, metrics) {
+    convertTimeSeriesData(md, metrics, targetFormat) {
+        if (targetFormat === 'table') {
+            return this.convertTimeSeriesDataToTable(md, metrics);
+        } else {
+            return this.convertTimeSeriesDataToTimeSeries(md, metrics);
+        }
+    }
+
+    convertTimeSeriesDataToTable(md, metrics) {
+        const table: Table = {type: 'table', columns: [], rows: []};
+        table.columns = [
+            {text: 'Time', id: '_time'},
+            ...metrics.map(m => {return {text: m, id: m}})
+        ];
+        table.rows = md.map(item => {
+            let row = [this.formatTimestamp(item.timestamp)];
+            metrics.forEach(m => {
+                row.push(item.result[m]);
+            });
+            return row;
+        })
+        return table;
+    }
+
+  convertTimeSeriesDataToTimeSeries(md, metrics) {
     return metrics.map(metric => {
       return {
         target: metric,
@@ -379,7 +416,33 @@ export default class DruidDatasource {
       .join("-");
   }
 
-  convertTopNData(md, dimension, metric) {
+    convertTopNData(md, dimension, metric, targetFormat) {
+        if (targetFormat === 'table') {
+            return this.convertTopNDataToTable(md, dimension, metric);
+        } else {
+            return this.convertTopNDataToTimeSeries(md, dimension, metric);
+        }
+    }
+
+    convertTopNDataToTable(md, dimension, metric) {
+        const table: Table = {type: 'table', columns: [], rows: []};
+        table.columns = [
+            {text: 'Time', id: '_time'},
+            {text: dimension, id: dimension},
+            {text: metric, id: metric}
+        ];
+        md.forEach(item => {
+            item.result.forEach(r => {
+                let row = [this.formatTimestamp(item.timestamp)];
+                row.push(r[dimension]);
+                row.push(r[metric]);
+                table.rows.push(row)
+            });
+        });
+        return table;
+    }
+
+  convertTopNDataToTimeSeries(md, dimension, metric) {
     /*
       Druid topN results look like this:
       [
@@ -482,16 +545,43 @@ export default class DruidDatasource {
     });
   }
 
-  convertGroupByData(md, groupBy, metrics) {
+    convertGroupByData(md, groupBy, metrics, resultFormat) {
+        if (resultFormat === 'table') {
+            return this.convertGroupByDataToTable(md, groupBy, metrics);
+        } else { // timeseries
+            return this.convertGroupByDataToTimeSeries(md, groupBy, metrics);
+        }
+    }
+
+    convertGroupByDataToTable(md, groupBy, metrics) {
+        const table: Table = {type: 'table', columns: [], rows: []};
+        const firstColumns = [
+            {text: 'Time', id: '_time'},
+        ];
+        table.columns = [
+            ...firstColumns,
+            ...groupBy.map(g => {return {id: g, text: g}}),
+            ...metrics.map(m => {return {id: m, text: m}})
+        ];
+        table.rows = md.map(item => {
+            let row = [this.formatTimestamp(item.timestamp)];
+            groupBy.forEach(g => row.push(item.event[g]));
+            metrics.forEach(m => row.push(item.event[m]));
+            return row;
+        });
+        return table;
+    }
+
+  convertGroupByDataToTimeSeries(md, groupBy, metrics) {
     const mergedData = md.map(item => {
       /*
         The first map() transforms the list Druid events into a list of objects
-        with keys of the form "<groupName>:<metric>" and values
+        with keys of the form "<groupName>: <metric>" and values
         of the form [metricValue, unixTime]
       */
       const groupName = this.getGroupName(groupBy, item);
       const keys = metrics.map(metric => {
-        return groupName + ":" + metric;
+        return `${groupName}: ${metric}`;
       });
       const vals = metrics.map(metric => {
         return [
@@ -532,7 +622,46 @@ export default class DruidDatasource {
     });
   }
 
-  convertSelectData(data) {
+    convertSelectData(data, targetFormat) {
+        if (targetFormat === 'table') {
+            return this.convertSelectDataToTable(data);
+        } else {
+            return this.convertSelectDataToTimeSeries(data);
+        }
+    }
+
+    convertSelectDataToTable(data) {
+        const resultList = _.map(data, "result");
+        const dimensions = _.uniq(_.flattenDeep(_.map(resultList, "dimensions")));
+        const metrics = _.uniq(_.flattenDeep(_.map(resultList, "metrics")));
+        const eventsList = _.map(resultList, "events");
+        const eventList = _.flatten(eventsList);
+        const table: Table = {type: 'table', columns: [], rows: []};
+        const columns = [
+            {text: 'Time', id: '_time'},
+        ];
+        dimensions.forEach(d => {
+            columns.push({text: d, id: d});
+        });
+        metrics.forEach(m => {
+            columns.push({text: m, id: m});
+        });
+        table.columns = columns;
+        for (let i = 0; i < eventList.length; i++) {
+            const event = eventList[i].event;
+            const timestamp = event.timestamp;
+            if (_.isEmpty(timestamp)) {
+              continue;
+            }
+            let row = [this.formatTimestamp(event.timestamp)];
+            dimensions.forEach(d => {row.push(event[d])});
+            metrics.forEach(m => row.push(event[m]));
+            table.rows.push(row);
+        }
+        return table;
+    }
+
+  convertSelectDataToTimeSeries(data) {
     const resultList = _.map(data, "result");
     const eventsList = _.map(resultList, "events");
     const eventList = _.flatten(eventsList);

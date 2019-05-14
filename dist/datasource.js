@@ -52,6 +52,7 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                     var _this = this;
                     var from = this.dateToMoment(options.range.from, false);
                     var to = this.dateToMoment(options.range.to, true);
+                    console.log(options);
                     var promises = options.targets.map(function (target) {
                         if (target.hide === true || lodash_1.default.isEmpty(target.druidDS) || (lodash_1.default.isEmpty(target.aggregators) && target.queryType !== "select")) {
                             var d = _this.q.defer();
@@ -96,7 +97,7 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         var dimension_1 = this.templateSrv.replace(target.dimension);
                         promise = this.topNQuery(datasource, intervals, granularity, filters, aggregators, postAggregators, threshold, metric_1, dimension_1)
                             .then(function (response) {
-                            return _this.convertTopNData(response.data, dimension_1, metric_1);
+                            return _this.convertTopNData(response.data, dimension_1, metric_1, target.resultFormat);
                         });
                     }
                     else if (target.queryType === 'groupBy') {
@@ -104,23 +105,31 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         limitSpec = this.getLimitSpec(target.limit, target.orderBy);
                         promise = this.groupByQuery(datasource, intervals, granularity, filters, aggregators, postAggregators, groupBy_1, limitSpec)
                             .then(function (response) {
-                            return _this.convertGroupByData(response.data, groupBy_1, metricNames);
+                            return _this.convertGroupByData(response.data, groupBy_1, metricNames, target.resultFormat);
                         });
                     }
                     else if (target.queryType === 'select') {
                         promise = this.selectQuery(datasource, intervals, granularity, selectDimensions, selectMetrics, filters, selectThreshold);
                         return promise.then(function (response) {
-                            return _this.convertSelectData(response.data);
+                            return _this.convertSelectData(response.data, target.resultFormat);
                         });
                     }
                     else {
                         promise = this.timeSeriesQuery(datasource, intervals, granularity, filters, aggregators, postAggregators)
                             .then(function (response) {
-                            return _this.convertTimeSeriesData(response.data, metricNames);
+                            return _this.convertTimeSeriesData(response.data, metricNames, target.resultFormat);
                         });
                     }
                     return promise.then(function (metrics) {
                         var fromMs = _this.formatTimestamp(from);
+                        if (target.resultFormat === 'table') {
+                            metrics.rows.forEach(function (row) {
+                                if (row[0] < fromMs) {
+                                    row[0] = fromMs;
+                                }
+                            });
+                            return metrics;
+                        }
                         metrics.forEach(function (metric) {
                             if (!lodash_1.default.isEmpty(metric.datapoints[0]) && metric.datapoints[0][1] < fromMs) {
                                 metric.datapoints[0][1] = fromMs;
@@ -308,7 +317,30 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                 DruidDatasource.prototype.formatTimestamp = function (ts) {
                     return moment_1.default(ts).format('X') * 1000;
                 };
-                DruidDatasource.prototype.convertTimeSeriesData = function (md, metrics) {
+                DruidDatasource.prototype.convertTimeSeriesData = function (md, metrics, targetFormat) {
+                    if (targetFormat === 'table') {
+                        return this.convertTimeSeriesDataToTable(md, metrics);
+                    }
+                    else {
+                        return this.convertTimeSeriesDataToTimeSeries(md, metrics);
+                    }
+                };
+                DruidDatasource.prototype.convertTimeSeriesDataToTable = function (md, metrics) {
+                    var _this = this;
+                    var table = { type: 'table', columns: [], rows: [] };
+                    table.columns = [
+                        { text: 'Time', id: '_time' }
+                    ].concat(metrics.map(function (m) { return { text: m, id: m }; }));
+                    table.rows = md.map(function (item) {
+                        var row = [_this.formatTimestamp(item.timestamp)];
+                        metrics.forEach(function (m) {
+                            row.push(item.result[m]);
+                        });
+                        return row;
+                    });
+                    return table;
+                };
+                DruidDatasource.prototype.convertTimeSeriesDataToTimeSeries = function (md, metrics) {
                     var _this = this;
                     return metrics.map(function (metric) {
                         return {
@@ -328,7 +360,33 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                     })
                         .join("-");
                 };
-                DruidDatasource.prototype.convertTopNData = function (md, dimension, metric) {
+                DruidDatasource.prototype.convertTopNData = function (md, dimension, metric, targetFormat) {
+                    if (targetFormat === 'table') {
+                        return this.convertTopNDataToTable(md, dimension, metric);
+                    }
+                    else {
+                        return this.convertTopNDataToTimeSeries(md, dimension, metric);
+                    }
+                };
+                DruidDatasource.prototype.convertTopNDataToTable = function (md, dimension, metric) {
+                    var _this = this;
+                    var table = { type: 'table', columns: [], rows: [] };
+                    table.columns = [
+                        { text: 'Time', id: '_time' },
+                        { text: dimension, id: dimension },
+                        { text: metric, id: metric }
+                    ];
+                    md.forEach(function (item) {
+                        item.result.forEach(function (r) {
+                            var row = [_this.formatTimestamp(item.timestamp)];
+                            row.push(r[dimension]);
+                            row.push(r[metric]);
+                            table.rows.push(row);
+                        });
+                    });
+                    return table;
+                };
+                DruidDatasource.prototype.convertTopNDataToTimeSeries = function (md, dimension, metric) {
                     var _this = this;
                     var dVals = md.reduce(function (dValsSoFar, tsItem) {
                         var dValsForTs = lodash_1.default.map(tsItem.result, dimension);
@@ -367,12 +425,35 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         };
                     });
                 };
-                DruidDatasource.prototype.convertGroupByData = function (md, groupBy, metrics) {
+                DruidDatasource.prototype.convertGroupByData = function (md, groupBy, metrics, resultFormat) {
+                    if (resultFormat === 'table') {
+                        return this.convertGroupByDataToTable(md, groupBy, metrics);
+                    }
+                    else {
+                        return this.convertGroupByDataToTimeSeries(md, groupBy, metrics);
+                    }
+                };
+                DruidDatasource.prototype.convertGroupByDataToTable = function (md, groupBy, metrics) {
+                    var _this = this;
+                    var table = { type: 'table', columns: [], rows: [] };
+                    var firstColumns = [
+                        { text: 'Time', id: '_time' },
+                    ];
+                    table.columns = firstColumns.concat(groupBy.map(function (g) { return { id: g, text: g }; }), metrics.map(function (m) { return { id: m, text: m }; }));
+                    table.rows = md.map(function (item) {
+                        var row = [_this.formatTimestamp(item.timestamp)];
+                        groupBy.forEach(function (g) { return row.push(item.event[g]); });
+                        metrics.forEach(function (m) { return row.push(item.event[m]); });
+                        return row;
+                    });
+                    return table;
+                };
+                DruidDatasource.prototype.convertGroupByDataToTimeSeries = function (md, groupBy, metrics) {
                     var _this = this;
                     var mergedData = md.map(function (item) {
                         var groupName = _this.getGroupName(groupBy, item);
                         var keys = metrics.map(function (metric) {
-                            return groupName + ":" + metric;
+                            return groupName + ": " + metric;
                         });
                         var vals = metrics.map(function (metric) {
                             return [
@@ -398,23 +479,65 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         };
                     });
                 };
-                DruidDatasource.prototype.convertSelectData = function (data) {
+                DruidDatasource.prototype.convertSelectData = function (data, targetFormat) {
+                    if (targetFormat === 'table') {
+                        return this.convertSelectDataToTable(data);
+                    }
+                    else {
+                        return this.convertSelectDataToTimeSeries(data);
+                    }
+                };
+                DruidDatasource.prototype.convertSelectDataToTable = function (data) {
+                    var resultList = lodash_1.default.map(data, "result");
+                    var dimensions = lodash_1.default.uniq(lodash_1.default.flattenDeep(lodash_1.default.map(resultList, "dimensions")));
+                    var metrics = lodash_1.default.uniq(lodash_1.default.flattenDeep(lodash_1.default.map(resultList, "metrics")));
+                    var eventsList = lodash_1.default.map(resultList, "events");
+                    var eventList = lodash_1.default.flatten(eventsList);
+                    var table = { type: 'table', columns: [], rows: [] };
+                    var columns = [
+                        { text: 'Time', id: '_time' },
+                    ];
+                    dimensions.forEach(function (d) {
+                        columns.push({ text: d, id: d });
+                    });
+                    metrics.forEach(function (m) {
+                        columns.push({ text: m, id: m });
+                    });
+                    table.columns = columns;
+                    var _loop_1 = function (i) {
+                        var event_1 = eventList[i].event;
+                        var timestamp = event_1.timestamp;
+                        if (lodash_1.default.isEmpty(timestamp)) {
+                            return "continue";
+                        }
+                        var row = [this_1.formatTimestamp(event_1.timestamp)];
+                        dimensions.forEach(function (d) { row.push(event_1[d]); });
+                        metrics.forEach(function (m) { return row.push(event_1[m]); });
+                        table.rows.push(row);
+                    };
+                    var this_1 = this;
+                    for (var i = 0; i < eventList.length; i++) {
+                        _loop_1(i);
+                    }
+                    return table;
+                };
+                DruidDatasource.prototype.convertSelectDataToTimeSeries = function (data) {
                     var resultList = lodash_1.default.map(data, "result");
                     var eventsList = lodash_1.default.map(resultList, "events");
                     var eventList = lodash_1.default.flatten(eventsList);
                     var result = {};
                     for (var i = 0; i < eventList.length; i++) {
-                        var event_1 = eventList[i].event;
-                        var timestamp = event_1.timestamp;
+                        var event_2 = eventList[i].event;
+                        var timestamp = event_2.timestamp;
                         if (lodash_1.default.isEmpty(timestamp)) {
                             continue;
                         }
-                        for (var key in event_1) {
+                        for (var key in event_2) {
                             if (key !== "timestamp") {
                                 if (!result[key]) {
                                     result[key] = { "target": key, "datapoints": [] };
                                 }
-                                result[key].datapoints.push([event_1[key], timestamp]);
+                                result[key].datapoints.push([event_2[key], timestamp]);
                             }
                         }
                     }

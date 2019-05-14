@@ -27,6 +27,7 @@ export class DruidQueryCtrl extends QueryCtrl {
   customGranularity: any;
   target: any;
   datasource: any;
+  resultFormats: any;
 
   queryTypeValidators = {
     "timeseries": _.noop.bind(this),
@@ -81,6 +82,10 @@ export class DruidQueryCtrl extends QueryCtrl {
     this.postAggregatorTypes = _.keys(this.postAggregatorValidators);
     this.arithmeticPostAggregator = _.keys(this.arithmeticPostAggregatorFns);
     this.customGranularity = this.customGranularities;
+    this.resultFormats = [
+        {text: 'Time series', value: 'time_series'},
+        {text: 'Table', value: 'table'}
+    ];
 
     this.errors = this.validateTarget();
     if (!this.target.currentFilter) {

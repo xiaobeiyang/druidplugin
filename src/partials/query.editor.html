@@ -268,7 +268,7 @@
     <div class="gf-form" ng-show="ctrl.addFilterMode" ng-switch on="ctrl.target.currentFilter.type">
         <input type="text" ng-switch-when="search" class="input-small gf-form-input width-10" spellcheck='false' ng-model="ctrl.target.currentFilter.dimension" placeholder="dimension" bs-typeahead="ctrl.getDimensions" data-min-length=0 ng-blur="ctrl.targetBlur()">
         <select ng-switch-when="search" class="input-small gf-form-input width-10" spellcheck='false'
-            ng-model="ctrl.target.currentFilter.query.type"  ng-options="type for type in ['contains', 'insensitive_contains']" ng-blur="ctrl.targetBlur()">
+            ng-model="ctrl.target.currentFilter.query.type" ng-options="type for type in ['contains', 'insensitive_contains']" ng-blur="ctrl.targetBlur()">
         </select>
         <input type="text" ng-switch-when="search" class="input-small gf-form-input width-10" spellcheck='false' ng-model="ctrl.target.currentFilter.query.value" ng-blur="ctrl.targetBlur()" placeholder="value">
     </div>
@@ -520,6 +520,19 @@
   </div>
   <div class="gf-form gf-form--grow">
     <div class="gf-form-label gf-form-label--grow"></div>
+  </div>
+  <div class="gf-form-inline">
+    <div class="gf-form">
+        <label class="gf-form-label query-keyword">FORMAT AS</label>
+        <div class="gf-form-select-wrapper">
+            <select
+                lass="gf-form-input gf-size-auto"
+                ng-model="ctrl.target.resultFormat"
+                ng-options="f.value as f.text for f in ctrl.resultFormats"
+                ng-change="ctrl.refresh()">
+            </select>
+        </div>
+    </div>
   </div>
 </div>
 </query-editor-row>

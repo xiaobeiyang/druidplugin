@@ -22,6 +22,7 @@ export declare class DruidQueryCtrl extends QueryCtrl {
     customGranularity: any;
     target: any;
     datasource: any;
+    resultFormats: any;
     queryTypeValidators: {
         "timeseries": any;
         "groupBy": any;
