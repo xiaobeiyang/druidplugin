@@ -53,8 +53,8 @@ export class DruidQueryCtrl extends QueryCtrl {
   };
   postAggregatorValidators = {
     "arithmetic": this.validateArithmeticPostAggregator.bind(this),
-    "max": this.validateMaxPostAggregator.bind(this),
-    "min": this.validateMinPostAggregator.bind(this),
+    // "max": this.validateMaxPostAggregator.bind(this),
+    // "min": this.validateMinPostAggregator.bind(this),
     "quantile": this.validateQuantilePostAggregator.bind(this)
   };
 

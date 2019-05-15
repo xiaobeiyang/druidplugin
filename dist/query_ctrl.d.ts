@@ -47,8 +47,6 @@ export declare class DruidQueryCtrl extends QueryCtrl {
     };
     postAggregatorValidators: {
         "arithmetic": any;
-        "max": any;
-        "min": any;
         "quantile": any;
     };
     arithmeticPostAggregatorFns: {

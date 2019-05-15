@@ -36,11 +36,20 @@ export default class DruidDatasource {
     ['year', moment.duration(1, 'year')]
   ];
   filterTemplateExpanders = {
-    "selector": ['value'],
-    "regex": ['pattern'],
-    "javascript": ['function'],
-    "search": [ 'query.type', 'query.value' ],
-    "in": ['values']
+    "selector": ['dimension', 'value'],
+    "regex": ['dimension', 'pattern'],
+    "javascript": ['dimension', 'function'],
+    "search": ['dimension', 'query.type', 'query.value'],
+    "in": ['dimension', 'values']
+  };
+  aggregationTemplateExpanders = {
+    "count": [],
+    "cardinality": ['fieldName'],
+    "longSum": ['fieldName'],
+    "doubleSum": ['fieldName'],
+    "approxHistogramFold": ['fieldName'],
+    "hyperUnique": ['fieldName'],
+    "thetaSketch": ['fieldName']
   };
 
 
@@ -58,10 +67,27 @@ export default class DruidDatasource {
     this.periodGranularity = instanceSettings.jsonData.periodGranularity;
   }
 
+  metricFindQuery(query: string, options?: any) {
+    const interpolated = this.templateSrv.replace(query, options.scopedVars, 'pipe');
+      let req: any = {
+        method: 'POST',
+        url: this.url + '/druid/v2/sql/',
+        data: {query: interpolated}
+      };
+      let values = new Set();
+      return this.backendSrv.datasourceRequest(req).then(response => {
+        response.data.forEach(r => {
+            if (r.__value !== undefined) {
+                values.add({value: r.__value, text: r.__text});
+            }
+        })
+        return Array.from(values.values());
+      });
+  }
+
   query(options) {
     const from = this.dateToMoment(options.range.from, false);
     const to = this.dateToMoment(options.range.to, true);
-    console.log(options)
     let promises = options.targets.map(target => {
       if (target.hide === true || _.isEmpty(target.druidDS) || (_.isEmpty(target.aggregators) && target.queryType !== "select")) {
         const d = this.q.defer();
@@ -91,7 +117,9 @@ export default class DruidDatasource {
   doQuery(from, to, granularity, target) {
     let datasource = target.druidDS;
     let filters = target.filters;
-    let aggregators = target.aggregators.map(this.splitCardinalityFields);
+    let aggregators = target.aggregators.map(aggr => {
+        return this.replaceTemplateValues(aggr, this.aggregationTemplateExpanders[aggr.type]);
+    }).map(this.splitCardinalityFields);
     let postAggregators = target.postAggregators;
     let limitSpec = null;
     let metricNames = this.getMetricNames(aggregators, postAggregators);

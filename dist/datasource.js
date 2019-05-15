@@ -31,11 +31,20 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         ['year', moment_1.default.duration(1, 'year')]
                     ];
                     this.filterTemplateExpanders = {
-                        "selector": ['value'],
-                        "regex": ['pattern'],
-                        "javascript": ['function'],
-                        "search": ['query.type', 'query.value'],
-                        "in": ['values']
+                        "selector": ['dimension', 'value'],
+                        "regex": ['dimension', 'pattern'],
+                        "javascript": ['dimension', 'function'],
+                        "search": ['dimension', 'query.type', 'query.value'],
+                        "in": ['dimension', 'values']
+                    };
+                    this.aggregationTemplateExpanders = {
+                        "count": [],
+                        "cardinality": ['fieldName'],
+                        "longSum": ['fieldName'],
+                        "doubleSum": ['fieldName'],
+                        "approxHistogramFold": ['fieldName'],
+                        "hyperUnique": ['fieldName'],
+                        "thetaSketch": ['fieldName']
                     };
                     this.name = instanceSettings.name;
                     this.id = instanceSettings.id;
@@ -48,11 +57,27 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                     this.supportMetrics = true;
                     this.periodGranularity = instanceSettings.jsonData.periodGranularity;
                 }
+                DruidDatasource.prototype.metricFindQuery = function (query, options) {
+                    var interpolated = this.templateSrv.replace(query, options.scopedVars, 'pipe');
+                    var req = {
+                        method: 'POST',
+                        url: this.url + '/druid/v2/sql/',
+                        data: { query: interpolated }
+                    };
+                    var values = new Set();
+                    return this.backendSrv.datasourceRequest(req).then(function (response) {
+                        response.data.forEach(function (r) {
+                            if (r.__value !== undefined) {
+                                values.add({ value: r.__value, text: r.__text });
+                            }
+                        });
+                        return Array.from(values.values());
+                    });
+                };
                 DruidDatasource.prototype.query = function (options) {
                     var _this = this;
                     var from = this.dateToMoment(options.range.from, false);
                     var to = this.dateToMoment(options.range.to, true);
-                    console.log(options);
                     var promises = options.targets.map(function (target) {
                         if (target.hide === true || lodash_1.default.isEmpty(target.druidDS) || (lodash_1.default.isEmpty(target.aggregators) && target.queryType !== "select")) {
                             var d = _this.q.defer();
@@ -79,7 +104,9 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                     var _this = this;
                     var datasource = target.druidDS;
                     var filters = target.filters;
-                    var aggregators = target.aggregators.map(this.splitCardinalityFields);
+                    var aggregators = target.aggregators.map(function (aggr) {
+                        return _this.replaceTemplateValues(aggr, _this.aggregationTemplateExpanders[aggr.type]);
+                    }).map(this.splitCardinalityFields);
                     var postAggregators = target.postAggregators;
                     var limitSpec = null;
                     var metricNames = this.getMetricNames(aggregators, postAggregators);

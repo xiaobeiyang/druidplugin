@@ -55,8 +55,6 @@ System.register(["lodash", "app/plugins/sdk", "./css/query_editor.css!"], functi
                     };
                     _this.postAggregatorValidators = {
                         "arithmetic": _this.validateArithmeticPostAggregator.bind(_this),
-                        "max": _this.validateMaxPostAggregator.bind(_this),
-                        "min": _this.validateMinPostAggregator.bind(_this),
                         "quantile": _this.validateQuantilePostAggregator.bind(_this)
                     };
                     _this.arithmeticPostAggregatorFns = { '+': null, '-': null, '*': null, '/': null };

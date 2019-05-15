@@ -22,7 +22,17 @@ export default class DruidDatasource {
         "search": string[];
         "in": string[];
     };
+    aggregationTemplateExpanders: {
+        "count": any[];
+        "cardinality": string[];
+        "longSum": string[];
+        "doubleSum": string[];
+        "approxHistogramFold": string[];
+        "hyperUnique": string[];
+        "thetaSketch": string[];
+    };
     constructor(instanceSettings: any, $q: any, backendSrv: any, templateSrv: any);
+    metricFindQuery(query: string, options?: any): any;
     query(options: any): any;
     doQuery(from: any, to: any, granularity: any, target: any): any;
     splitCardinalityFields(aggregator: any): any;
