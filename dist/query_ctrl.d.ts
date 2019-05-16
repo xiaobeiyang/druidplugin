@@ -47,6 +47,8 @@ export declare class DruidQueryCtrl extends QueryCtrl {
     };
     postAggregatorValidators: {
         "arithmetic": any;
+        "max": any;
+        "min": any;
         "quantile": any;
     };
     arithmeticPostAggregatorFns: {
@@ -94,7 +96,6 @@ export declare class DruidQueryCtrl extends QueryCtrl {
     isValidArithmeticPostAggregatorFn(fn: any): any;
     validateMaxDataPoints(target: any, errs: any): boolean;
     validateLimit(target: any, errs: any): boolean;
-    validateOrderBy(target: any): boolean;
     validateGroupByQuery(target: any, errs: any): boolean;
     validateTopNQuery(target: any, errs: any): boolean;
     validateSelectQuery(target: any, errs: any): boolean;

@@ -6,6 +6,7 @@ import * as dateMath from 'app/core/utils/datemath';
 import * as Druid from 'druid.d'
 
 const DRUID_DATASOURCE_PATH = '/druid/v2/datasources/';
+const SPLITER = '\u001f';
 
 interface Table {
     type: string;
@@ -97,7 +98,9 @@ export default class DruidDatasource {
       const maxDataPointsByResolution = options.maxDataPoints;
       const maxDataPointsByConfig = target.maxDataPoints ? target.maxDataPoints : Number.MAX_VALUE;
       const maxDataPoints = Math.min(maxDataPointsByResolution, maxDataPointsByConfig);
-      let granularity = target.shouldOverrideGranularity ? this.templateSrv.replace(target.customGranularity) : this.computeGranularity(from, to, maxDataPoints);
+      let granularity = target.shouldOverrideGranularity ?
+        this.templateSrv.replace(target.customGranularity, options.scopedVars) :
+        this.computeGranularity(from, to, maxDataPoints);
       //Round up to start of an interval
       //Width of bar chars in Grafana is determined by size of the smallest interval
       const roundedFrom = granularity === "all" ? from : this.roundUpStartTime(from, granularity);
@@ -106,7 +109,11 @@ export default class DruidDatasource {
           granularity = { "type": "period", "period": "P1D", "timeZone": this.periodGranularity }
         }
       }
-      return this.doQuery(roundedFrom, to, granularity, target);
+      // ignore default groupBy of grafana
+      if (typeof target.groupBy !== 'string') {
+        target.groupBy = ''
+      }
+      return this.doQuery(roundedFrom, to, granularity, target, options.scopedVars);
     });
 
     return this.q.all(promises).then(results => {
@@ -114,11 +121,18 @@ export default class DruidDatasource {
     });
   }
 
-  doQuery(from, to, granularity, target) {
+  doQuery(from, to, granularity, target, scopedVars) {
+    target = _.cloneDeep(target);
     let datasource = target.druidDS;
+    if (target.dimension) {
+        target.dimension = this.templateSrv.replace(target.dimension, scopedVars)
+    }
+    if (target.druidMetric) {
+        target.druidMetric = this.templateSrv.replace(target.druidMetric, scopedVars)
+    }
     let filters = target.filters;
     let aggregators = target.aggregators.map(aggr => {
-        return this.replaceTemplateValues(aggr, this.aggregationTemplateExpanders[aggr.type]);
+        return this.replaceTemplateValues(aggr, scopedVars, this.aggregationTemplateExpanders[aggr.type]);
     }).map(this.splitCardinalityFields);
     let postAggregators = target.postAggregators;
     let limitSpec = null;
@@ -126,8 +140,12 @@ export default class DruidDatasource {
     let intervals = this.getQueryIntervals(from, to);
     let promise = null;
 
-    let selectMetrics = target.selectMetrics;
-    let selectDimensions = target.selectDimensions;
+    let selectMetrics = target.selectMetrics === undefined ? undefined : target.selectMetrics.map(m => {
+        return this.templateSrv.replace(m, scopedVars);
+    });
+    let selectDimensions = target.selectDimensions === undefined ? undefined : target.selectDimensions.map(d => {
+        return this.templateSrv.replace(d, scopedVars);
+    });
     let selectThreshold = target.selectThreshold;
     if (!selectThreshold) {
       selectThreshold = 5;
@@ -136,28 +154,35 @@ export default class DruidDatasource {
     if (target.queryType === 'topN') {
       let threshold = target.limit;
       let metric = target.druidMetric;
-      let dimension = this.templateSrv.replace(target.dimension);
-      promise = this.topNQuery(datasource, intervals, granularity, filters, aggregators, postAggregators, threshold, metric, dimension)
+      let dimension = this.templateSrv.replace(target.dimension, scopedVars);
+      promise = this.topNQuery(scopedVars, datasource, intervals, granularity, filters, aggregators, postAggregators, threshold, metric, dimension)
         .then(response => {
           return this.convertTopNData(response.data, dimension, metric, target.resultFormat);
         });
     }
     else if (target.queryType === 'groupBy') {
-      let groupBy = _.map(target.groupBy, (e) => { return this.templateSrv.replace(e) });
+      const groupBy = _.split(this.templateSrv.replace(
+          _.replace(target.groupBy, ',', SPLITER),
+          scopedVars, this.arrayFormat), SPLITER);
+      if (target.orderBy) {
+        target.orderBy = _.split(this.templateSrv.replace(
+          _.replace(target.orderBy, ',', SPLITER),
+          scopedVars, this.arrayFormat), SPLITER);
+      }
       limitSpec = this.getLimitSpec(target.limit, target.orderBy);
-      promise = this.groupByQuery(datasource, intervals, granularity, filters, aggregators, postAggregators, groupBy, limitSpec)
+      promise = this.groupByQuery(scopedVars, datasource, intervals, granularity, filters, aggregators, postAggregators, groupBy, limitSpec)
         .then(response => {
           return this.convertGroupByData(response.data, groupBy, metricNames, target.resultFormat);
         });
     }
     else if (target.queryType === 'select') {
-      promise = this.selectQuery(datasource, intervals, granularity, selectDimensions, selectMetrics, filters, selectThreshold);
+      promise = this.selectQuery(scopedVars, datasource, intervals, granularity, selectDimensions, selectMetrics, filters, selectThreshold);
       return promise.then(response => {
         return this.convertSelectData(response.data, target.resultFormat);
       });
     }
     else {
-      promise = this.timeSeriesQuery(datasource, intervals, granularity, filters, aggregators, postAggregators)
+      promise = this.timeSeriesQuery(scopedVars, datasource, intervals, granularity, filters, aggregators, postAggregators)
         .then(response => {
           return this.convertTimeSeriesData(response.data, metricNames, target.resultFormat);
         });
@@ -204,7 +229,7 @@ export default class DruidDatasource {
     return aggregator;
   }
 
-  selectQuery(datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
+  selectQuery(scopedVars, datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
               dimensions: Array<string | Object>, metric: Array<string | Object>, filters: Array<Druid.DruidFilter>,
               selectThreshold: Object) {
     let query: Druid.DruidSelectQuery = {
@@ -218,13 +243,13 @@ export default class DruidDatasource {
     };
 
     if (filters && filters.length > 0) {
-      query.filter = this.buildFilterTree(filters);
+      query.filter = this.buildFilterTree(filters, scopedVars);
     }
 
     return this.druidQuery(query);
   };
 
-  timeSeriesQuery(datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
+  timeSeriesQuery(scopedVars, datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
                   filters: Array<Druid.DruidFilter>, aggregators: Object, postAggregators: Object) {
     let query: Druid.DruidTimeSeriesQuery = {
       queryType: "timeseries",
@@ -236,13 +261,13 @@ export default class DruidDatasource {
     };
 
     if (filters && filters.length > 0) {
-      query.filter = this.buildFilterTree(filters);
+      query.filter = this.buildFilterTree(filters, scopedVars);
     }
 
     return this.druidQuery(query);
   };
 
-  topNQuery(datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
+  topNQuery(scopedVars, datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
             filters: Array<Druid.DruidFilter>, aggregators: Object, postAggregators: Object,
             threshold: number, metric: string | Object, dimension: string | Object) {
     const query: Druid.DruidTopNQuery = {
@@ -258,13 +283,13 @@ export default class DruidDatasource {
     };
 
     if (filters && filters.length > 0) {
-      query.filter = this.buildFilterTree(filters);
+      query.filter = this.buildFilterTree(filters, scopedVars);
     }
 
     return this.druidQuery(query);
   };
 
-  groupByQuery(datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
+  groupByQuery(scopedVars, datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
                filters: Array<Druid.DruidFilter>, aggregators: Object, postAggregators: Object, groupBy: Array<string>,
                limitSpec: Druid.LimitSpec) {
     const query: Druid.DruidGroupByQuery = {
@@ -279,7 +304,7 @@ export default class DruidDatasource {
     };
 
     if (filters && filters.length > 0) {
-      query.filter = this.buildFilterTree(filters);
+      query.filter = this.buildFilterTree(filters, scopedVars);
     }
 
     return this.druidQuery(query);
@@ -348,7 +373,7 @@ export default class DruidDatasource {
         "value": query
       }
     });
-    topNquery.filter = this.buildFilterTree(filters);
+    topNquery.filter = this.buildFilterTree(filters, {});
 
     return this.druidQuery(topNquery);
   };
@@ -361,10 +386,10 @@ export default class DruidDatasource {
     });
   };
 
-  buildFilterTree(filters): Druid.DruidFilter {
+  buildFilterTree(filters, scopedVars): Druid.DruidFilter {
     //Do template variable replacement
     const replacedFilters = filters.map(filter => {
-      return this.replaceTemplateValues(filter, this.filterTemplateExpanders[filter.type]);
+      return this.replaceTemplateValues(filter, scopedVars, this.filterTemplateExpanders[filter.type]);
     })
       .map(filter => {
         const finalFilter = _.omit(filter, 'negate');
@@ -747,14 +772,23 @@ export default class DruidDatasource {
     return rounded;
   }
 
-  replaceTemplateValues(obj, attrList) {
+  replaceTemplateValues(obj, scopedVars, attrList) {
     const substitutedVals = attrList.map(attr => {
       if (obj.type == 'in' && attr == 'values') {
-        return _.split((this.templateSrv.replace(_.get(obj, attr), '{}', 'csv')), ',');
+        return _.split(this.templateSrv.replace(
+            _.replace(_.get(obj, attr), ',', SPLITER),
+            scopedVars, this.arrayFormat), SPLITER);
       } else {
-        return this.templateSrv.replace(_.get(obj, attr));
+        return this.templateSrv.replace(_.get(obj, attr), scopedVars);
       }
     });
     return _.assign(_.clone(obj, true), _.zipObjectDeep(attrList, substitutedVals));
+  }
+
+  arrayFormat(value) {
+    if (_.isArray(value)) {
+        return value.join(SPLITER);
+    }
+    return value;
   }
 }

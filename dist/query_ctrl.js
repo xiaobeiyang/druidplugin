@@ -55,6 +55,8 @@ System.register(["lodash", "app/plugins/sdk", "./css/query_editor.css!"], functi
                     };
                     _this.postAggregatorValidators = {
                         "arithmetic": _this.validateArithmeticPostAggregator.bind(_this),
+                        "max": _this.validateMaxPostAggregator.bind(_this),
+                        "min": _this.validateMinPostAggregator.bind(_this),
                         "quantile": _this.validateQuantilePostAggregator.bind(_this)
                     };
                     _this.arithmeticPostAggregatorFns = { '+': null, '-': null, '*': null, '/': null };
@@ -324,25 +326,8 @@ System.register(["lodash", "app/plugins/sdk", "./css/query_editor.css!"], functi
                     target.limit = intLimit;
                     return true;
                 };
-                DruidQueryCtrl.prototype.validateOrderBy = function (target) {
-                    if (target.orderBy && !Array.isArray(target.orderBy)) {
-                        target.orderBy = target.orderBy.split(",");
-                    }
-                    return true;
-                };
                 DruidQueryCtrl.prototype.validateGroupByQuery = function (target, errs) {
-                    if (target.groupBy && !Array.isArray(target.groupBy)) {
-                        target.groupBy = target.groupBy.split(",");
-                    }
-                    target.groupBy = lodash_1.default.filter(target.groupBy, function (o) { return typeof o === 'string'; });
-                    if (!target.groupBy) {
-                        errs.groupBy = "Must list dimensions to group by.";
-                        return false;
-                    }
-                    if (!this.validateLimit(target, errs) || !this.validateOrderBy(target)) {
-                        return false;
-                    }
-                    return true;
+                    return this.validateLimit(target, errs);
                 };
                 DruidQueryCtrl.prototype.validateTopNQuery = function (target, errs) {
                     if (!target.dimension) {

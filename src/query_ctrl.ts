@@ -383,26 +383,8 @@ export class DruidQueryCtrl extends QueryCtrl {
     return true;
   }
 
-  validateOrderBy(target) {
-    if (target.orderBy && !Array.isArray(target.orderBy)) {
-      target.orderBy = target.orderBy.split(",");
-    }
-    return true;
-  }
-
   validateGroupByQuery(target, errs) {
-    if (target.groupBy && !Array.isArray(target.groupBy)) {
-      target.groupBy = target.groupBy.split(",");
-    }
-    target.groupBy = _.filter(target.groupBy, function(o) { return typeof o === 'string'; });
-    if (!target.groupBy) {
-      errs.groupBy = "Must list dimensions to group by.";
-      return false;
-    }
-    if (!this.validateLimit(target, errs) || !this.validateOrderBy(target)) {
-      return false;
-    }
-    return true;
+    return this.validateLimit(target, errs);
   }
 
   validateTopNQuery(target, errs) {
