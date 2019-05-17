@@ -156,8 +156,8 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         });
                     }
                     else if (target.queryType === 'select') {
-                        promise = this.selectQuery(scopedVars, datasource, intervals, granularity, selectDimensions, selectMetrics, filters, selectThreshold);
-                        return promise.then(function (response) {
+                        promise = this.selectQuery(scopedVars, datasource, intervals, granularity, selectDimensions, selectMetrics, filters, selectThreshold)
+                            .then(function (response) {
                             return _this.convertSelectData(response.data, target.resultFormat);
                         });
                     }

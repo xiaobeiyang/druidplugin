@@ -176,10 +176,10 @@ export default class DruidDatasource {
         });
     }
     else if (target.queryType === 'select') {
-      promise = this.selectQuery(scopedVars, datasource, intervals, granularity, selectDimensions, selectMetrics, filters, selectThreshold);
-      return promise.then(response => {
-        return this.convertSelectData(response.data, target.resultFormat);
-      });
+      promise = this.selectQuery(scopedVars, datasource, intervals, granularity, selectDimensions, selectMetrics, filters, selectThreshold)
+        .then(response => {
+          return this.convertSelectData(response.data, target.resultFormat);
+        });
     }
     else {
       promise = this.timeSeriesQuery(scopedVars, datasource, intervals, granularity, filters, aggregators, postAggregators)
