@@ -27,6 +27,7 @@ export class DruidQueryCtrl extends QueryCtrl {
   customGranularity: any;
   target: any;
   datasource: any;
+  resultFormats: any;
 
   queryTypeValidators = {
     "timeseries": _.noop.bind(this),
@@ -37,7 +38,9 @@ export class DruidQueryCtrl extends QueryCtrl {
   filterValidators = {
     "selector": this.validateSelectorFilter.bind(this),
     "regex": this.validateRegexFilter.bind(this),
-    "javascript": this.validateJavascriptFilter.bind(this)
+    "javascript": this.validateJavascriptFilter.bind(this),
+    "search": this.validateSearchFilter.bind(this),
+    "in": this.validateInFilter.bind(this),
   };
   aggregatorValidators = {
     "count": this.validateCountAggregator,
@@ -79,6 +82,10 @@ export class DruidQueryCtrl extends QueryCtrl {
     this.postAggregatorTypes = _.keys(this.postAggregatorValidators);
     this.arithmeticPostAggregator = _.keys(this.arithmeticPostAggregatorFns);
     this.customGranularity = this.customGranularities;
+    this.resultFormats = [
+        {text: 'Time series', value: 'time_series'},
+        {text: 'Table', value: 'table'}
+    ];
 
     this.errors = this.validateTarget();
     if (!this.target.currentFilter) {
@@ -376,25 +383,8 @@ export class DruidQueryCtrl extends QueryCtrl {
     return true;
   }
 
-  validateOrderBy(target) {
-    if (target.orderBy && !Array.isArray(target.orderBy)) {
-      target.orderBy = target.orderBy.split(",");
-    }
-    return true;
-  }
-
   validateGroupByQuery(target, errs) {
-    if (target.groupBy && !Array.isArray(target.groupBy)) {
-      target.groupBy = target.groupBy.split(",");
-    }
-    if (!target.groupBy) {
-      errs.groupBy = "Must list dimensions to group by.";
-      return false;
-    }
-    if (!this.validateLimit(target, errs) || !this.validateOrderBy(target)) {
-      return false;
-    }
-    return true;
+    return this.validateLimit(target, errs);
   }
 
   validateTopNQuery(target, errs) {
@@ -447,6 +437,32 @@ export class DruidQueryCtrl extends QueryCtrl {
     }
     if (!target.currentFilter.pattern) {
       return "Must provide pattern for regex filter.";
+    }
+    return null;
+  }
+
+  validateInFilter(target) {
+    if (!target.currentFilter.dimension) {
+        return "Must provide dimension name for in filter.";
+    }
+    if (!target.currentFilter.values) {
+        return "Must provide dimension values for in filter.";
+    }
+    return null;
+  }
+
+  validateSearchFilter(target) {
+    if (!target.currentFilter.dimension) {
+        return "Must provide dimension name for search filter.";
+    }
+    if (!target.currentFilter.query) {
+        return "Must provide query for search filter.";
+    }
+    if (!target.currentFilter.query.type) {
+        return "Must provide query type for search filter.";
+    }
+    if (!target.currentFilter.query.value) {
+        return "Must provide query value for search filter.";
     }
     return null;
   }

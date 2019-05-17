@@ -6,7 +6,7 @@ System.register(["lodash", "app/plugins/sdk", "./css/query_editor.css!"], functi
                 ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
                 function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
             return extendStatics(d, b);
-        }
+        };
         return function (d, b) {
             extendStatics(d, b);
             function __() { this.constructor = d; }
@@ -40,7 +40,9 @@ System.register(["lodash", "app/plugins/sdk", "./css/query_editor.css!"], functi
                     _this.filterValidators = {
                         "selector": _this.validateSelectorFilter.bind(_this),
                         "regex": _this.validateRegexFilter.bind(_this),
-                        "javascript": _this.validateJavascriptFilter.bind(_this)
+                        "javascript": _this.validateJavascriptFilter.bind(_this),
+                        "search": _this.validateSearchFilter.bind(_this),
+                        "in": _this.validateInFilter.bind(_this),
                     };
                     _this.aggregatorValidators = {
                         "count": _this.validateCountAggregator,
@@ -76,6 +78,10 @@ System.register(["lodash", "app/plugins/sdk", "./css/query_editor.css!"], functi
                     _this.postAggregatorTypes = lodash_1.default.keys(_this.postAggregatorValidators);
                     _this.arithmeticPostAggregator = lodash_1.default.keys(_this.arithmeticPostAggregatorFns);
                     _this.customGranularity = _this.customGranularities;
+                    _this.resultFormats = [
+                        { text: 'Time series', value: 'time_series' },
+                        { text: 'Table', value: 'table' }
+                    ];
                     _this.errors = _this.validateTarget();
                     if (!_this.target.currentFilter) {
                         _this.clearCurrentFilter();
@@ -320,24 +326,8 @@ System.register(["lodash", "app/plugins/sdk", "./css/query_editor.css!"], functi
                     target.limit = intLimit;
                     return true;
                 };
-                DruidQueryCtrl.prototype.validateOrderBy = function (target) {
-                    if (target.orderBy && !Array.isArray(target.orderBy)) {
-                        target.orderBy = target.orderBy.split(",");
-                    }
-                    return true;
-                };
                 DruidQueryCtrl.prototype.validateGroupByQuery = function (target, errs) {
-                    if (target.groupBy && !Array.isArray(target.groupBy)) {
-                        target.groupBy = target.groupBy.split(",");
-                    }
-                    if (!target.groupBy) {
-                        errs.groupBy = "Must list dimensions to group by.";
-                        return false;
-                    }
-                    if (!this.validateLimit(target, errs) || !this.validateOrderBy(target)) {
-                        return false;
-                    }
-                    return true;
+                    return this.validateLimit(target, errs);
                 };
                 DruidQueryCtrl.prototype.validateTopNQuery = function (target, errs) {
                     if (!target.dimension) {
@@ -384,6 +374,30 @@ System.register(["lodash", "app/plugins/sdk", "./css/query_editor.css!"], functi
                     }
                     if (!target.currentFilter.pattern) {
                         return "Must provide pattern for regex filter.";
+                    }
+                    return null;
+                };
+                DruidQueryCtrl.prototype.validateInFilter = function (target) {
+                    if (!target.currentFilter.dimension) {
+                        return "Must provide dimension name for in filter.";
+                    }
+                    if (!target.currentFilter.values) {
+                        return "Must provide dimension values for in filter.";
+                    }
+                    return null;
+                };
+                DruidQueryCtrl.prototype.validateSearchFilter = function (target) {
+                    if (!target.currentFilter.dimension) {
+                        return "Must provide dimension name for search filter.";
+                    }
+                    if (!target.currentFilter.query) {
+                        return "Must provide query for search filter.";
+                    }
+                    if (!target.currentFilter.query.type) {
+                        return "Must provide query type for search filter.";
+                    }
+                    if (!target.currentFilter.query.value) {
+                        return "Must provide query value for search filter.";
                     }
                     return null;
                 };

@@ -215,6 +215,24 @@
           <i class="fa fa-remove"></i>
         </a>
       </label>
+      <label ng-switch-when="in" class="gf-form-label">
+        {{filter.type}}:&nbsp;{{filter.dimension}}&nbsp;in&nbsp;{{filter.values}}
+        <a ng-click="ctrl.editFilter($index)">
+          <i class="fa fa-pencil"></i>
+        </a>
+        <a ng-click="ctrl.removeFilter($index)">
+          <i class="fa fa-remove"></i>
+        </a>
+      </label>
+      <label ng-switch-when="search" class="gf-form-label">
+        {{filter.type}}:&nbsp;{{filter.dimension}}&nbsp;{{filter.query.type}}&nbsp;{{filter.query.value}}
+        <a ng-click="ctrl.editFilter($index)">
+          <i class="fa fa-pencil"></i>
+        </a>
+        <a ng-click="ctrl.removeFilter($index)">
+          <i class="fa fa-remove"></i>
+        </a>
+      </label>
       <label class="gf-form-label" ng-if="filter.negate">&nbsp;)</label>
     </div>
 
@@ -242,6 +260,17 @@
     <div class="gf-form" ng-show="ctrl.addFilterMode" ng-switch on="ctrl.target.currentFilter.type">
       <input type="text" ng-switch-when="javascript" class="input-small gf-form-input width-10" spellcheck='false' ng-model="ctrl.target.currentFilter.dimension" placeholder="dimension" bs-typeahead="ctrl.getDimensions" data-min-length=0 ng-blur="ctrl.targetBlur()">
       <input type="text" ng-switch-when="javascript" class="input-small gf-form-input width-10" spellcheck='false' ng-model="ctrl.target.currentFilter.function" placeholder="func" ng-blur="ctrl.targetBlur()" placeholder="value">
+    </div>
+    <div class="gf-form" ng-show="ctrl.addFilterMode" ng-switch on="ctrl.target.currentFilter.type">
+        <input type="text" ng-switch-when="in" class="input-small gf-form-input width-10" spellcheck='false' ng-model="ctrl.target.currentFilter.dimension" placeholder="dimension" bs-typeahead="ctrl.getDimensions" data-min-length=0 ng-blur="ctrl.targetBlur()">
+        <input type="text" ng-switch-when="in" class="input-small gf-form-input width-10" spellcheck='false' ng-model="ctrl.target.currentFilter.values" ng-blur="ctrl.targetBlur()" placeholder="val1,val2">
+    </div>
+    <div class="gf-form" ng-show="ctrl.addFilterMode" ng-switch on="ctrl.target.currentFilter.type">
+        <input type="text" ng-switch-when="search" class="input-small gf-form-input width-10" spellcheck='false' ng-model="ctrl.target.currentFilter.dimension" placeholder="dimension" bs-typeahead="ctrl.getDimensions" data-min-length=0 ng-blur="ctrl.targetBlur()">
+        <select ng-switch-when="search" class="input-small gf-form-input width-10" spellcheck='false'
+            ng-model="ctrl.target.currentFilter.query.type" ng-options="type for type in ['contains', 'insensitive_contains']" ng-blur="ctrl.targetBlur()">
+        </select>
+        <input type="text" ng-switch-when="search" class="input-small gf-form-input width-10" spellcheck='false' ng-model="ctrl.target.currentFilter.query.value" ng-blur="ctrl.targetBlur()" placeholder="value">
     </div>
     <gf-form-switch ng-show="ctrl.addFilterMode" ng-switch on="ctrl.target.currentFilter.type" class="gf-form" label="Negate" label-class="query-keyword" checked="ctrl.target.currentFilter.negate">
     </gf-form-switch>
@@ -491,6 +520,18 @@
   </div>
   <div class="gf-form gf-form--grow">
     <div class="gf-form-label gf-form-label--grow"></div>
+  </div>
+  <div class="gf-form">
+    <label class="gf-form-label query-keyword">FORMAT AS</label>
+    <div class="gf-form-select-wrapper">
+        <select
+            class="gf-form-input gf-size-auto"
+            ng-init="time_series"
+            ng-model="ctrl.target.resultFormat"
+            ng-options="f.value as f.text for f in ctrl.resultFormats"
+            ng-change="ctrl.refresh()">
+        </select>
+    </div>
   </div>
 </div>
 </query-editor-row>

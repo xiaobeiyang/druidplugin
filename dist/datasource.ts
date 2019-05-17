@@ -5,7 +5,14 @@ import moment from 'moment';
 import * as dateMath from 'app/core/utils/datemath';
 import * as Druid from 'druid.d'
 
-const DRUID_DATASOURCE_PATH = '/druid/v2/datasources';
+const DRUID_DATASOURCE_PATH = '/druid/v2/datasources/';
+const SPLITER = '\u001f';
+
+interface Table {
+    type: string;
+    columns: any[];
+    rows: any[];
+  }
 
 export default class DruidDatasource {
   id: number;
@@ -30,10 +37,20 @@ export default class DruidDatasource {
     ['year', moment.duration(1, 'year')]
   ];
   filterTemplateExpanders = {
-    "selector": ['value'],
-    "regex": ['pattern'],
-    "javascript": ['function'],
-    "search": []
+    "selector": ['dimension', 'value'],
+    "regex": ['dimension', 'pattern'],
+    "javascript": ['dimension', 'function'],
+    "search": ['dimension', 'query.type', 'query.value'],
+    "in": ['dimension', 'values']
+  };
+  aggregationTemplateExpanders = {
+    "count": [],
+    "cardinality": ['fieldName'],
+    "longSum": ['fieldName'],
+    "doubleSum": ['fieldName'],
+    "approxHistogramFold": ['fieldName'],
+    "hyperUnique": ['fieldName'],
+    "thetaSketch": ['fieldName']
   };
 
 
@@ -51,10 +68,27 @@ export default class DruidDatasource {
     this.periodGranularity = instanceSettings.jsonData.periodGranularity;
   }
 
+  metricFindQuery(query: string, options?: any) {
+    const interpolated = this.templateSrv.replace(query, options.scopedVars, 'pipe');
+      let req: any = {
+        method: 'POST',
+        url: this.url + '/druid/v2/sql/',
+        data: {query: interpolated}
+      };
+      let values = new Set();
+      return this.backendSrv.datasourceRequest(req).then(response => {
+        response.data.forEach(r => {
+            if (r.__value !== undefined) {
+                values.add({value: r.__value, text: r.__text});
+            }
+        })
+        return Array.from(values.values());
+      });
+  }
+
   query(options) {
     const from = this.dateToMoment(options.range.from, false);
     const to = this.dateToMoment(options.range.to, true);
-
     let promises = options.targets.map(target => {
       if (target.hide === true || _.isEmpty(target.druidDS) || (_.isEmpty(target.aggregators) && target.queryType !== "select")) {
         const d = this.q.defer();
@@ -64,7 +98,9 @@ export default class DruidDatasource {
       const maxDataPointsByResolution = options.maxDataPoints;
       const maxDataPointsByConfig = target.maxDataPoints ? target.maxDataPoints : Number.MAX_VALUE;
       const maxDataPoints = Math.min(maxDataPointsByResolution, maxDataPointsByConfig);
-      let granularity = target.shouldOverrideGranularity ? this.templateSrv.replace(target.customGranularity) : this.computeGranularity(from, to, maxDataPoints);
+      let granularity = target.shouldOverrideGranularity ?
+        this.templateSrv.replace(target.customGranularity, options.scopedVars) :
+        this.computeGranularity(from, to, maxDataPoints);
       //Round up to start of an interval
       //Width of bar chars in Grafana is determined by size of the smallest interval
       const roundedFrom = granularity === "all" ? from : this.roundUpStartTime(from, granularity);
@@ -73,7 +109,11 @@ export default class DruidDatasource {
           granularity = { "type": "period", "period": "P1D", "timeZone": this.periodGranularity }
         }
       }
-      return this.doQuery(roundedFrom, to, granularity, target);
+      // ignore default groupBy of grafana
+      if (typeof target.groupBy !== 'string') {
+        target.groupBy = ''
+      }
+      return this.doQuery(roundedFrom, to, granularity, target, options.scopedVars);
     });
 
     return this.q.all(promises).then(results => {
@@ -81,19 +121,31 @@ export default class DruidDatasource {
     });
   }
 
-  doQuery(from, to, granularity, target) {
+  doQuery(from, to, granularity, target, scopedVars) {
+    target = _.cloneDeep(target);
     let datasource = target.druidDS;
+    if (target.dimension) {
+        target.dimension = this.templateSrv.replace(target.dimension, scopedVars)
+    }
+    if (target.druidMetric) {
+        target.druidMetric = this.templateSrv.replace(target.druidMetric, scopedVars)
+    }
     let filters = target.filters;
-    let aggregators = target.aggregators.map(this.splitCardinalityFields);
+    let aggregators = target.aggregators.map(aggr => {
+        return this.replaceTemplateValues(aggr, scopedVars, this.aggregationTemplateExpanders[aggr.type]);
+    }).map(this.splitCardinalityFields);
     let postAggregators = target.postAggregators;
-    let groupBy = _.map(target.groupBy, (e) => { return this.templateSrv.replace(e) });
     let limitSpec = null;
     let metricNames = this.getMetricNames(aggregators, postAggregators);
     let intervals = this.getQueryIntervals(from, to);
     let promise = null;
 
-    let selectMetrics = target.selectMetrics;
-    let selectDimensions = target.selectDimensions;
+    let selectMetrics = target.selectMetrics === undefined ? undefined : target.selectMetrics.map(m => {
+        return this.templateSrv.replace(m, scopedVars);
+    });
+    let selectDimensions = target.selectDimensions === undefined ? undefined : target.selectDimensions.map(d => {
+        return this.templateSrv.replace(d, scopedVars);
+    });
     let selectThreshold = target.selectThreshold;
     if (!selectThreshold) {
       selectThreshold = 5;
@@ -102,29 +154,37 @@ export default class DruidDatasource {
     if (target.queryType === 'topN') {
       let threshold = target.limit;
       let metric = target.druidMetric;
-      let dimension = this.templateSrv.replace(target.dimension);
-      promise = this.topNQuery(datasource, intervals, granularity, filters, aggregators, postAggregators, threshold, metric, dimension)
+      let dimension = this.templateSrv.replace(target.dimension, scopedVars);
+      promise = this.topNQuery(scopedVars, datasource, intervals, granularity, filters, aggregators, postAggregators, threshold, metric, dimension)
         .then(response => {
-          return this.convertTopNData(response.data, dimension, metric);
+          return this.convertTopNData(response.data, dimension, metric, target.resultFormat);
         });
     }
     else if (target.queryType === 'groupBy') {
+      const groupBy = _.split(this.templateSrv.replace(
+          _.replace(target.groupBy, ',', SPLITER),
+          scopedVars, this.arrayFormat), SPLITER);
+      if (target.orderBy) {
+        target.orderBy = _.split(this.templateSrv.replace(
+          _.replace(target.orderBy, ',', SPLITER),
+          scopedVars, this.arrayFormat), SPLITER);
+      }
       limitSpec = this.getLimitSpec(target.limit, target.orderBy);
-      promise = this.groupByQuery(datasource, intervals, granularity, filters, aggregators, postAggregators, groupBy, limitSpec)
+      promise = this.groupByQuery(scopedVars, datasource, intervals, granularity, filters, aggregators, postAggregators, groupBy, limitSpec)
         .then(response => {
-          return this.convertGroupByData(response.data, groupBy, metricNames);
+          return this.convertGroupByData(response.data, groupBy, metricNames, target.resultFormat);
         });
     }
     else if (target.queryType === 'select') {
-      promise = this.selectQuery(datasource, intervals, granularity, selectDimensions, selectMetrics, filters, selectThreshold);
-      return promise.then(response => {
-        return this.convertSelectData(response.data);
-      });
+      promise = this.selectQuery(scopedVars, datasource, intervals, granularity, selectDimensions, selectMetrics, filters, selectThreshold)
+        .then(response => {
+          return this.convertSelectData(response.data, target.resultFormat);
+        });
     }
     else {
-      promise = this.timeSeriesQuery(datasource, intervals, granularity, filters, aggregators, postAggregators)
+      promise = this.timeSeriesQuery(scopedVars, datasource, intervals, granularity, filters, aggregators, postAggregators)
         .then(response => {
-          return this.convertTimeSeriesData(response.data, metricNames);
+          return this.convertTimeSeriesData(response.data, metricNames, target.resultFormat);
         });
     }
     /*
@@ -145,6 +205,14 @@ export default class DruidDatasource {
     */
     return promise.then(metrics => {
       let fromMs = this.formatTimestamp(from);
+      if (target.resultFormat === 'table') {
+        metrics.rows.forEach(row => {
+            if (row[0] < fromMs) {
+                row[0] = fromMs;
+            }
+        });
+        return metrics;
+      }
       metrics.forEach(metric => {
         if (!_.isEmpty(metric.datapoints[0]) && metric.datapoints[0][1] < fromMs) {
           metric.datapoints[0][1] = fromMs;
@@ -161,7 +229,7 @@ export default class DruidDatasource {
     return aggregator;
   }
 
-  selectQuery(datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
+  selectQuery(scopedVars, datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
               dimensions: Array<string | Object>, metric: Array<string | Object>, filters: Array<Druid.DruidFilter>,
               selectThreshold: Object) {
     let query: Druid.DruidSelectQuery = {
@@ -175,13 +243,13 @@ export default class DruidDatasource {
     };
 
     if (filters && filters.length > 0) {
-      query.filter = this.buildFilterTree(filters);
+      query.filter = this.buildFilterTree(filters, scopedVars);
     }
 
     return this.druidQuery(query);
   };
 
-  timeSeriesQuery(datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
+  timeSeriesQuery(scopedVars, datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
                   filters: Array<Druid.DruidFilter>, aggregators: Object, postAggregators: Object) {
     let query: Druid.DruidTimeSeriesQuery = {
       queryType: "timeseries",
@@ -193,13 +261,13 @@ export default class DruidDatasource {
     };
 
     if (filters && filters.length > 0) {
-      query.filter = this.buildFilterTree(filters);
+      query.filter = this.buildFilterTree(filters, scopedVars);
     }
 
     return this.druidQuery(query);
   };
 
-  topNQuery(datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
+  topNQuery(scopedVars, datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
             filters: Array<Druid.DruidFilter>, aggregators: Object, postAggregators: Object,
             threshold: number, metric: string | Object, dimension: string | Object) {
     const query: Druid.DruidTopNQuery = {
@@ -215,13 +283,13 @@ export default class DruidDatasource {
     };
 
     if (filters && filters.length > 0) {
-      query.filter = this.buildFilterTree(filters);
+      query.filter = this.buildFilterTree(filters, scopedVars);
     }
 
     return this.druidQuery(query);
   };
 
-  groupByQuery(datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
+  groupByQuery(scopedVars, datasource: string, intervals: Array<string>, granularity: Druid.Granularity,
                filters: Array<Druid.DruidFilter>, aggregators: Object, postAggregators: Object, groupBy: Array<string>,
                limitSpec: Druid.LimitSpec) {
     const query: Druid.DruidGroupByQuery = {
@@ -236,7 +304,7 @@ export default class DruidDatasource {
     };
 
     if (filters && filters.length > 0) {
-      query.filter = this.buildFilterTree(filters);
+      query.filter = this.buildFilterTree(filters, scopedVars);
     }
 
     return this.druidQuery(query);
@@ -305,7 +373,7 @@ export default class DruidDatasource {
         "value": query
       }
     });
-    topNquery.filter = this.buildFilterTree(filters);
+    topNquery.filter = this.buildFilterTree(filters, {});
 
     return this.druidQuery(topNquery);
   };
@@ -318,10 +386,10 @@ export default class DruidDatasource {
     });
   };
 
-  buildFilterTree(filters): Druid.DruidFilter {
+  buildFilterTree(filters, scopedVars): Druid.DruidFilter {
     //Do template variable replacement
     const replacedFilters = filters.map(filter => {
-      return this.replaceTemplateValues(filter, this.filterTemplateExpanders[filter.type]);
+      return this.replaceTemplateValues(filter, scopedVars, this.filterTemplateExpanders[filter.type]);
     })
       .map(filter => {
         const finalFilter = _.omit(filter, 'negate');
@@ -357,7 +425,31 @@ export default class DruidDatasource {
     return moment(ts).format('X') * 1000;
   }
 
-  convertTimeSeriesData(md, metrics) {
+    convertTimeSeriesData(md, metrics, targetFormat) {
+        if (targetFormat === 'table') {
+            return this.convertTimeSeriesDataToTable(md, metrics);
+        } else {
+            return this.convertTimeSeriesDataToTimeSeries(md, metrics);
+        }
+    }
+
+    convertTimeSeriesDataToTable(md, metrics) {
+        const table: Table = {type: 'table', columns: [], rows: []};
+        table.columns = [
+            {text: 'Time', id: '_time'},
+            ...metrics.map(m => {return {text: m, id: m}})
+        ];
+        table.rows = md.map(item => {
+            let row = [this.formatTimestamp(item.timestamp)];
+            metrics.forEach(m => {
+                row.push(item.result[m]);
+            });
+            return row;
+        })
+        return table;
+    }
+
+  convertTimeSeriesDataToTimeSeries(md, metrics) {
     return metrics.map(metric => {
       return {
         target: metric,
@@ -378,7 +470,33 @@ export default class DruidDatasource {
       .join("-");
   }
 
-  convertTopNData(md, dimension, metric) {
+    convertTopNData(md, dimension, metric, targetFormat) {
+        if (targetFormat === 'table') {
+            return this.convertTopNDataToTable(md, dimension, metric);
+        } else {
+            return this.convertTopNDataToTimeSeries(md, dimension, metric);
+        }
+    }
+
+    convertTopNDataToTable(md, dimension, metric) {
+        const table: Table = {type: 'table', columns: [], rows: []};
+        table.columns = [
+            {text: 'Time', id: '_time'},
+            {text: dimension, id: dimension},
+            {text: metric, id: metric}
+        ];
+        md.forEach(item => {
+            item.result.forEach(r => {
+                let row = [this.formatTimestamp(item.timestamp)];
+                row.push(r[dimension]);
+                row.push(r[metric]);
+                table.rows.push(row)
+            });
+        });
+        return table;
+    }
+
+  convertTopNDataToTimeSeries(md, dimension, metric) {
     /*
       Druid topN results look like this:
       [
@@ -481,16 +599,43 @@ export default class DruidDatasource {
     });
   }
 
-  convertGroupByData(md, groupBy, metrics) {
+    convertGroupByData(md, groupBy, metrics, resultFormat) {
+        if (resultFormat === 'table') {
+            return this.convertGroupByDataToTable(md, groupBy, metrics);
+        } else { // timeseries
+            return this.convertGroupByDataToTimeSeries(md, groupBy, metrics);
+        }
+    }
+
+    convertGroupByDataToTable(md, groupBy, metrics) {
+        const table: Table = {type: 'table', columns: [], rows: []};
+        const firstColumns = [
+            {text: 'Time', id: '_time'},
+        ];
+        table.columns = [
+            ...firstColumns,
+            ...groupBy.map(g => {return {id: g, text: g}}),
+            ...metrics.map(m => {return {id: m, text: m}})
+        ];
+        table.rows = md.map(item => {
+            let row = [this.formatTimestamp(item.timestamp)];
+            groupBy.forEach(g => row.push(item.event[g]));
+            metrics.forEach(m => row.push(item.event[m]));
+            return row;
+        });
+        return table;
+    }
+
+  convertGroupByDataToTimeSeries(md, groupBy, metrics) {
     const mergedData = md.map(item => {
       /*
         The first map() transforms the list Druid events into a list of objects
-        with keys of the form "<groupName>:<metric>" and values
+        with keys of the form "<groupName>: <metric>" and values
         of the form [metricValue, unixTime]
       */
       const groupName = this.getGroupName(groupBy, item);
       const keys = metrics.map(metric => {
-        return groupName + ":" + metric;
+        return `${groupName}: ${metric}`;
       });
       const vals = metrics.map(metric => {
         return [
@@ -531,7 +676,46 @@ export default class DruidDatasource {
     });
   }
 
-  convertSelectData(data) {
+    convertSelectData(data, targetFormat) {
+        if (targetFormat === 'table') {
+            return this.convertSelectDataToTable(data);
+        } else {
+            return this.convertSelectDataToTimeSeries(data);
+        }
+    }
+
+    convertSelectDataToTable(data) {
+        const resultList = _.map(data, "result");
+        const dimensions = _.uniq(_.flattenDeep(_.map(resultList, "dimensions")));
+        const metrics = _.uniq(_.flattenDeep(_.map(resultList, "metrics")));
+        const eventsList = _.map(resultList, "events");
+        const eventList = _.flatten(eventsList);
+        const table: Table = {type: 'table', columns: [], rows: []};
+        const columns = [
+            {text: 'Time', id: '_time'},
+        ];
+        dimensions.forEach(d => {
+            columns.push({text: d, id: d});
+        });
+        metrics.forEach(m => {
+            columns.push({text: m, id: m});
+        });
+        table.columns = columns;
+        for (let i = 0; i < eventList.length; i++) {
+            const event = eventList[i].event;
+            const timestamp = event.timestamp;
+            if (_.isEmpty(timestamp)) {
+              continue;
+            }
+            let row = [this.formatTimestamp(event.timestamp)];
+            dimensions.forEach(d => {row.push(event[d])});
+            metrics.forEach(m => row.push(event[m]));
+            table.rows.push(row);
+        }
+        return table;
+    }
+
+  convertSelectDataToTimeSeries(data) {
     const resultList = _.map(data, "result");
     const eventsList = _.map(resultList, "events");
     const eventList = _.flatten(eventsList);
@@ -588,10 +772,23 @@ export default class DruidDatasource {
     return rounded;
   }
 
-  replaceTemplateValues(obj, attrList) {
+  replaceTemplateValues(obj, scopedVars, attrList) {
     const substitutedVals = attrList.map(attr => {
-      return this.templateSrv.replace(obj[attr]);
+      if (obj.type == 'in' && attr == 'values') {
+        return _.split(this.templateSrv.replace(
+            _.replace(_.get(obj, attr), ',', SPLITER),
+            scopedVars, this.arrayFormat), SPLITER);
+      } else {
+        return this.templateSrv.replace(_.get(obj, attr), scopedVars);
+      }
     });
-    return _.assign(_.clone(obj, true), _.zipObject(attrList, substitutedVals));
+    return _.assign(_.clone(obj, true), _.zipObjectDeep(attrList, substitutedVals));
+  }
+
+  arrayFormat(value) {
+    if (_.isArray(value)) {
+        return value.join(SPLITER);
+    }
+    return value;
   }
 }
