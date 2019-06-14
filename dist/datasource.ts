@@ -162,11 +162,11 @@ export default class DruidDatasource {
     }
     else if (target.queryType === 'groupBy') {
       const groupBy = _.split(this.templateSrv.replace(
-          _.replace(target.groupBy, ',', SPLITER),
+          _.replace(target.groupBy, /,/g, SPLITER),
           scopedVars, this.arrayFormat), SPLITER);
       if (target.orderBy) {
         target.orderBy = _.split(this.templateSrv.replace(
-          _.replace(target.orderBy, ',', SPLITER),
+          _.replace(target.orderBy, /,/g, SPLITER),
           scopedVars, this.arrayFormat), SPLITER);
       }
       limitSpec = this.getLimitSpec(target.limit, target.orderBy);
@@ -776,7 +776,7 @@ export default class DruidDatasource {
     const substitutedVals = attrList.map(attr => {
       if (obj.type == 'in' && attr == 'values') {
         return _.split(this.templateSrv.replace(
-            _.replace(_.get(obj, attr), ',', SPLITER),
+            _.replace(_.get(obj, attr), /,/g, SPLITER),
             scopedVars, this.arrayFormat), SPLITER);
       } else {
         return this.templateSrv.replace(_.get(obj, attr), scopedVars);

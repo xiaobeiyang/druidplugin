@@ -145,9 +145,9 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         });
                     }
                     else if (target.queryType === 'groupBy') {
-                        var groupBy_1 = lodash_1.default.split(this.templateSrv.replace(lodash_1.default.replace(target.groupBy, ',', SPLITER), scopedVars, this.arrayFormat), SPLITER);
+                        var groupBy_1 = lodash_1.default.split(this.templateSrv.replace(lodash_1.default.replace(target.groupBy, /,/g, SPLITER), scopedVars, this.arrayFormat), SPLITER);
                         if (target.orderBy) {
-                            target.orderBy = lodash_1.default.split(this.templateSrv.replace(lodash_1.default.replace(target.orderBy, ',', SPLITER), scopedVars, this.arrayFormat), SPLITER);
+                            target.orderBy = lodash_1.default.split(this.templateSrv.replace(lodash_1.default.replace(target.orderBy, /,/g, SPLITER), scopedVars, this.arrayFormat), SPLITER);
                         }
                         limitSpec = this.getLimitSpec(target.limit, target.orderBy);
                         promise = this.groupByQuery(scopedVars, datasource, intervals, granularity, filters, aggregators, postAggregators, groupBy_1, limitSpec)
@@ -621,7 +621,7 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                     var _this = this;
                     var substitutedVals = attrList.map(function (attr) {
                         if (obj.type == 'in' && attr == 'values') {
-                            return lodash_1.default.split(_this.templateSrv.replace(lodash_1.default.replace(lodash_1.default.get(obj, attr), ',', SPLITER), scopedVars, _this.arrayFormat), SPLITER);
+                            return lodash_1.default.split(_this.templateSrv.replace(lodash_1.default.replace(lodash_1.default.get(obj, attr), /,/g, SPLITER), scopedVars, _this.arrayFormat), SPLITER);
                         }
                         else {
                             return _this.templateSrv.replace(lodash_1.default.get(obj, attr), scopedVars);
