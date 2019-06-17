@@ -120,7 +120,7 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                     var aggregators = target.aggregators.map(function (aggr) {
                         return _this.replaceTemplateValues(aggr, scopedVars, _this.aggregationTemplateExpanders[aggr.type]);
                     }).map(this.splitCardinalityFields);
-                    var postAggregators = target.postAggregators.map(function (postAggregator) {
+                    var postAggregators = lodash_1.default.map(target.postAggregators, function (postAggregator) {
                         if (postAggregator.type === "arithmetic") {
                             delete postAggregator.fieldsNames;
                         }
