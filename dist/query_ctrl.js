@@ -107,6 +107,9 @@ System.register(["lodash", "app/plugins/sdk", "./css/query_editor.css!"], functi
                         _this.datasource.getDataSources()
                             .then(callback);
                     };
+                    _this.listAggregatorFields = function (query, callback) {
+                        callback(_this.target.aggregators.map(function (aggretator) { return aggretator.name; }));
+                    };
                     _this.getDimensions = function (query, callback) {
                         return _this.datasource.getDimensionsAndMetrics(_this.target.druidDS)
                             .then(function (dimsAndMetrics) {
@@ -276,6 +279,11 @@ System.register(["lodash", "app/plugins/sdk", "./css/query_editor.css!"], functi
                         this.addPostAggregatorMode = false;
                     }
                     this.targetBlur();
+                };
+                DruidQueryCtrl.prototype.editPostAggregator = function (index) {
+                    this.addPostAggregatorMode = true;
+                    var delPostAggregator = this.target.postAggregators.splice(index, 1);
+                    this.target.currentPostAggregator = delPostAggregator[0];
                 };
                 DruidQueryCtrl.prototype.removePostAggregator = function (index) {
                     this.target.postAggregators.splice(index, 1);
@@ -479,17 +487,17 @@ System.register(["lodash", "app/plugins/sdk", "./css/query_editor.css!"], functi
                     if (!this.isValidArithmeticPostAggregatorFn(target.currentPostAggregator.fn)) {
                         return "Invalid arithmetic function";
                     }
-                    if (!target.currentPostAggregator.fields) {
+                    if (!target.currentPostAggregator.fieldsNames) {
                         return "Must provide a list of fields for arithmetic post aggregator.";
                     }
                     else {
-                        if (!Array.isArray(target.currentPostAggregator.fields)) {
-                            target.currentPostAggregator.fields = target.currentPostAggregator.fields
+                        if (!Array.isArray(target.currentPostAggregator.fieldsNames)) {
+                            target.currentPostAggregator.fieldsNames = target.currentPostAggregator.fieldsNames
                                 .split(",")
-                                .map(function (f) { return f.trim(); })
-                                .map(function (f) { return { type: "fieldAccess", fieldName: f }; });
+                                .map(function (f) { return f.trim(); });
+                            target.currentPostAggregator.fields = target.currentPostAggregator.fieldsNames.map(function (f) { return { type: "fieldAccess", fieldName: f }; });
                         }
-                        if (target.currentPostAggregator.fields.length < 2) {
+                        if (target.currentPostAggregator.fieldsNames.length < 2) {
                             return "Must provide at least two fields for arithmetic post aggregator.";
                         }
                     }

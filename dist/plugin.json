@@ -1,7 +1,7 @@
 {
   "type": "datasource",
   "name": "Druid",
-  "id": "pqm-druid-datasource",
+  "id": "testing-druid-datasource",
 
   "metrics": true,
 
