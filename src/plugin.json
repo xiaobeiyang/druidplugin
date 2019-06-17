@@ -1,7 +1,7 @@
 {
   "type": "datasource",
   "name": "Druid",
-  "id": "testing-druid-datasource",
+  "id": "paypal-druid-datasource",
 
   "metrics": true,
 
