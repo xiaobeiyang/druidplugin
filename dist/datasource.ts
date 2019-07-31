@@ -134,7 +134,12 @@ export default class DruidDatasource {
     let aggregators = target.aggregators.map(aggr => {
         return this.replaceTemplateValues(aggr, scopedVars, this.aggregationTemplateExpanders[aggr.type]);
     }).map(this.splitCardinalityFields);
-    let postAggregators = target.postAggregators;
+    const postAggregators = _.map(target.postAggregators, postAggregator => {
+        if (postAggregator.type === "arithmetic") {
+            delete postAggregator.fieldsNames;
+        }
+        return postAggregator;
+    });
     let limitSpec = null;
     let metricNames = this.getMetricNames(aggregators, postAggregators);
     let intervals = this.getQueryIntervals(from, to);

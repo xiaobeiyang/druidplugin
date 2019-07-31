@@ -14,6 +14,7 @@ export class DruidQueryCtrl extends QueryCtrl {
   addDimensionsMode: boolean;
   addMetricsMode: boolean;
   listDataSources: any;
+  listAggregatorFields: any;
   getDimensionsAndMetrics: any;
   getMetrics: any;
   getMetricsPlusDimensions: any;
@@ -119,6 +120,10 @@ export class DruidQueryCtrl extends QueryCtrl {
       this.datasource.getDataSources()
         .then(callback);
     };
+
+    this.listAggregatorFields = (query, callback) => {
+        callback(this.target.aggregators.map(aggretator => {return aggretator.name}));
+    }
 
     this.getDimensions = (query, callback) => {
       return this.datasource.getDimensionsAndMetrics(this.target.druidDS)
@@ -324,6 +329,12 @@ export class DruidQueryCtrl extends QueryCtrl {
     }
 
     this.targetBlur();
+  }
+
+  editPostAggregator(index) {
+    this.addPostAggregatorMode = true;
+    const delPostAggregator = this.target.postAggregators.splice(index, 1);
+    this.target.currentPostAggregator = delPostAggregator[0];
   }
 
   removePostAggregator(index) {
@@ -549,16 +560,18 @@ export class DruidQueryCtrl extends QueryCtrl {
     if (!this.isValidArithmeticPostAggregatorFn(target.currentPostAggregator.fn)) {
       return "Invalid arithmetic function";
     }
-    if (!target.currentPostAggregator.fields) {
+    if (!target.currentPostAggregator.fieldsNames) {
       return "Must provide a list of fields for arithmetic post aggregator.";
     } else {
-      if (!Array.isArray(target.currentPostAggregator.fields)) {
-        target.currentPostAggregator.fields = target.currentPostAggregator.fields
+      if (!Array.isArray(target.currentPostAggregator.fieldsNames)) {
+        target.currentPostAggregator.fieldsNames = target.currentPostAggregator.fieldsNames
           .split(",")
-          .map(function (f) { return f.trim(); })
-          .map(function (f) { return { type: "fieldAccess", fieldName: f }; });
+          .map(function (f) { return f.trim(); });
+        target.currentPostAggregator.fields = target.currentPostAggregator.fieldsNames.map(
+            function (f) { return { type: "fieldAccess", fieldName: f }; }
+        );
       }
-      if (target.currentPostAggregator.fields.length < 2) {
+      if (target.currentPostAggregator.fieldsNames.length < 2) {
         return "Must provide at least two fields for arithmetic post aggregator.";
       }
     }
