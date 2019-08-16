@@ -121,6 +121,10 @@ export default class DruidDatasource {
     });
   }
 
+  getHiddenNames(aggregators) {
+    return _.keyBy(_.map(_.filter(aggregators, function(o) { return o.nameHidden === true; }), (o) => {return {"name": o.name}}), "name");
+  }
+
   doQuery(from, to, granularity, target, scopedVars) {
     target = _.cloneDeep(target);
     let datasource = target.druidDS;
@@ -140,6 +144,7 @@ export default class DruidDatasource {
         }
         return postAggregator;
     });
+    const hiddenNames = _.merge(this.getHiddenNames(aggregators), this.getHiddenNames(postAggregators));
     let limitSpec = null;
     let metricNames = this.getMetricNames(aggregators, postAggregators);
     let intervals = this.getQueryIntervals(from, to);
@@ -177,7 +182,7 @@ export default class DruidDatasource {
       limitSpec = this.getLimitSpec(target.limit, target.orderBy);
       promise = this.groupByQuery(scopedVars, datasource, intervals, granularity, filters, aggregators, postAggregators, groupBy, limitSpec)
         .then(response => {
-          return this.convertGroupByData(response.data, groupBy, metricNames, target.resultFormat);
+          return this.convertGroupByData(response.data, groupBy, metricNames, target.resultFormat, hiddenNames);
         });
     }
     else if (target.queryType === 'select') {
@@ -189,7 +194,7 @@ export default class DruidDatasource {
     else {
       promise = this.timeSeriesQuery(scopedVars, datasource, intervals, granularity, filters, aggregators, postAggregators)
         .then(response => {
-          return this.convertTimeSeriesData(response.data, metricNames, target.resultFormat);
+          return this.convertTimeSeriesData(response.data, metricNames, target.resultFormat, hiddenNames);
         });
     }
     /*
@@ -430,19 +435,22 @@ export default class DruidDatasource {
     return moment(ts).format('X') * 1000;
   }
 
-    convertTimeSeriesData(md, metrics, targetFormat) {
+    convertTimeSeriesData(md, metrics, targetFormat, hiddenNames) {
         if (targetFormat === 'table') {
-            return this.convertTimeSeriesDataToTable(md, metrics);
+            return this.convertTimeSeriesDataToTable(md, metrics, hiddenNames);
         } else {
-            return this.convertTimeSeriesDataToTimeSeries(md, metrics);
+            return this.convertTimeSeriesDataToTimeSeries(md, metrics, hiddenNames);
         }
     }
 
-    convertTimeSeriesDataToTable(md, metrics) {
+    convertTimeSeriesDataToTable(md, metrics, hiddenNames) {
         const table: Table = {type: 'table', columns: [], rows: []};
         table.columns = [
             {text: 'Time', id: '_time'},
-            ...metrics.map(m => {return {text: m, id: m}})
+            ...metrics.map(m => {
+                if (hiddenNames.hasOwnProperty(m)) {return {id: m, text: ""}};
+                return {id: m, text: m};
+            })
         ];
         table.rows = md.map(item => {
             let row = [this.formatTimestamp(item.timestamp)];
@@ -454,10 +462,11 @@ export default class DruidDatasource {
         return table;
     }
 
-  convertTimeSeriesDataToTimeSeries(md, metrics) {
+  convertTimeSeriesDataToTimeSeries(md, metrics, hiddenNames) {
     return metrics.map(metric => {
+      const metricText = hiddenNames.hasOwnProperty(metric) ? "" : metric;
       return {
-        target: metric,
+        target: metricText,
         datapoints: md.map(item => {
           return [
             item.result[metric],
@@ -604,15 +613,15 @@ export default class DruidDatasource {
     });
   }
 
-    convertGroupByData(md, groupBy, metrics, resultFormat) {
+    convertGroupByData(md, groupBy, metrics, resultFormat, hiddenNames) {
         if (resultFormat === 'table') {
-            return this.convertGroupByDataToTable(md, groupBy, metrics);
+            return this.convertGroupByDataToTable(md, groupBy, metrics, hiddenNames);
         } else { // timeseries
-            return this.convertGroupByDataToTimeSeries(md, groupBy, metrics);
+            return this.convertGroupByDataToTimeSeries(md, groupBy, metrics, hiddenNames);
         }
     }
 
-    convertGroupByDataToTable(md, groupBy, metrics) {
+    convertGroupByDataToTable(md, groupBy, metrics, hiddenNames) {
         const table: Table = {type: 'table', columns: [], rows: []};
         const firstColumns = [
             {text: 'Time', id: '_time'},
@@ -620,7 +629,10 @@ export default class DruidDatasource {
         table.columns = [
             ...firstColumns,
             ...groupBy.map(g => {return {id: g, text: g}}),
-            ...metrics.map(m => {return {id: m, text: m}})
+            ...metrics.map(m => {
+                if (hiddenNames.hasOwnProperty(m)) {return {id: m, text: ""}};
+                return {id: m, text: m};
+            })
         ];
         table.rows = md.map(item => {
             let row = [this.formatTimestamp(item.timestamp)];
@@ -631,7 +643,7 @@ export default class DruidDatasource {
         return table;
     }
 
-  convertGroupByDataToTimeSeries(md, groupBy, metrics) {
+  convertGroupByDataToTimeSeries(md, groupBy, metrics, hiddenNames) {
     const mergedData = md.map(item => {
       /*
         The first map() transforms the list Druid events into a list of objects
@@ -640,6 +652,9 @@ export default class DruidDatasource {
       */
       const groupName = this.getGroupName(groupBy, item);
       const keys = metrics.map(metric => {
+        if (hiddenNames.hasOwnProperty(metric)) {
+          return groupName;
+        }
         return `${groupName}: ${metric}`;
       });
       const vals = metrics.map(metric => {

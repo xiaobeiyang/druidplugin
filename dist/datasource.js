@@ -106,6 +106,9 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         return { data: lodash_1.default.flatten(results) };
                     });
                 };
+                DruidDatasource.prototype.getHiddenNames = function (aggregators) {
+                    return lodash_1.default.keyBy(lodash_1.default.map(lodash_1.default.filter(aggregators, function (o) { return o.nameHidden === true; }), function (o) { return { "name": o.name }; }), "name");
+                };
                 DruidDatasource.prototype.doQuery = function (from, to, granularity, target, scopedVars) {
                     var _this = this;
                     target = lodash_1.default.cloneDeep(target);
@@ -126,6 +129,7 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         }
                         return postAggregator;
                     });
+                    var hiddenNames = lodash_1.default.merge(this.getHiddenNames(aggregators), this.getHiddenNames(postAggregators));
                     var limitSpec = null;
                     var metricNames = this.getMetricNames(aggregators, postAggregators);
                     var intervals = this.getQueryIntervals(from, to);
@@ -157,7 +161,7 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         limitSpec = this.getLimitSpec(target.limit, target.orderBy);
                         promise = this.groupByQuery(scopedVars, datasource, intervals, granularity, filters, aggregators, postAggregators, groupBy_1, limitSpec)
                             .then(function (response) {
-                            return _this.convertGroupByData(response.data, groupBy_1, metricNames, target.resultFormat);
+                            return _this.convertGroupByData(response.data, groupBy_1, metricNames, target.resultFormat, hiddenNames);
                         });
                     }
                     else if (target.queryType === 'select') {
@@ -169,7 +173,7 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                     else {
                         promise = this.timeSeriesQuery(scopedVars, datasource, intervals, granularity, filters, aggregators, postAggregators)
                             .then(function (response) {
-                            return _this.convertTimeSeriesData(response.data, metricNames, target.resultFormat);
+                            return _this.convertTimeSeriesData(response.data, metricNames, target.resultFormat, hiddenNames);
                         });
                     }
                     return promise.then(function (metrics) {
@@ -369,20 +373,26 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                 DruidDatasource.prototype.formatTimestamp = function (ts) {
                     return moment_1.default(ts).format('X') * 1000;
                 };
-                DruidDatasource.prototype.convertTimeSeriesData = function (md, metrics, targetFormat) {
+                DruidDatasource.prototype.convertTimeSeriesData = function (md, metrics, targetFormat, hiddenNames) {
                     if (targetFormat === 'table') {
-                        return this.convertTimeSeriesDataToTable(md, metrics);
+                        return this.convertTimeSeriesDataToTable(md, metrics, hiddenNames);
                     }
                     else {
-                        return this.convertTimeSeriesDataToTimeSeries(md, metrics);
+                        return this.convertTimeSeriesDataToTimeSeries(md, metrics, hiddenNames);
                     }
                 };
-                DruidDatasource.prototype.convertTimeSeriesDataToTable = function (md, metrics) {
+                DruidDatasource.prototype.convertTimeSeriesDataToTable = function (md, metrics, hiddenNames) {
                     var _this = this;
                     var table = { type: 'table', columns: [], rows: [] };
                     table.columns = [
                         { text: 'Time', id: '_time' }
-                    ].concat(metrics.map(function (m) { return { text: m, id: m }; }));
+                    ].concat(metrics.map(function (m) {
+                        if (hiddenNames.hasOwnProperty(m)) {
+                            return { id: m, text: "" };
+                        }
+                        ;
+                        return { id: m, text: m };
+                    }));
                     table.rows = md.map(function (item) {
                         var row = [_this.formatTimestamp(item.timestamp)];
                         metrics.forEach(function (m) {
@@ -392,11 +402,12 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                     });
                     return table;
                 };
-                DruidDatasource.prototype.convertTimeSeriesDataToTimeSeries = function (md, metrics) {
+                DruidDatasource.prototype.convertTimeSeriesDataToTimeSeries = function (md, metrics, hiddenNames) {
                     var _this = this;
                     return metrics.map(function (metric) {
+                        var metricText = hiddenNames.hasOwnProperty(metric) ? "" : metric;
                         return {
-                            target: metric,
+                            target: metricText,
                             datapoints: md.map(function (item) {
                                 return [
                                     item.result[metric],
@@ -477,21 +488,27 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         };
                     });
                 };
-                DruidDatasource.prototype.convertGroupByData = function (md, groupBy, metrics, resultFormat) {
+                DruidDatasource.prototype.convertGroupByData = function (md, groupBy, metrics, resultFormat, hiddenNames) {
                     if (resultFormat === 'table') {
-                        return this.convertGroupByDataToTable(md, groupBy, metrics);
+                        return this.convertGroupByDataToTable(md, groupBy, metrics, hiddenNames);
                     }
                     else {
-                        return this.convertGroupByDataToTimeSeries(md, groupBy, metrics);
+                        return this.convertGroupByDataToTimeSeries(md, groupBy, metrics, hiddenNames);
                     }
                 };
-                DruidDatasource.prototype.convertGroupByDataToTable = function (md, groupBy, metrics) {
+                DruidDatasource.prototype.convertGroupByDataToTable = function (md, groupBy, metrics, hiddenNames) {
                     var _this = this;
                     var table = { type: 'table', columns: [], rows: [] };
                     var firstColumns = [
                         { text: 'Time', id: '_time' },
                     ];
-                    table.columns = firstColumns.concat(groupBy.map(function (g) { return { id: g, text: g }; }), metrics.map(function (m) { return { id: m, text: m }; }));
+                    table.columns = firstColumns.concat(groupBy.map(function (g) { return { id: g, text: g }; }), metrics.map(function (m) {
+                        if (hiddenNames.hasOwnProperty(m)) {
+                            return { id: m, text: "" };
+                        }
+                        ;
+                        return { id: m, text: m };
+                    }));
                     table.rows = md.map(function (item) {
                         var row = [_this.formatTimestamp(item.timestamp)];
                         groupBy.forEach(function (g) { return row.push(item.event[g]); });
@@ -500,11 +517,14 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                     });
                     return table;
                 };
-                DruidDatasource.prototype.convertGroupByDataToTimeSeries = function (md, groupBy, metrics) {
+                DruidDatasource.prototype.convertGroupByDataToTimeSeries = function (md, groupBy, metrics, hiddenNames) {
                     var _this = this;
                     var mergedData = md.map(function (item) {
                         var groupName = _this.getGroupName(groupBy, item);
                         var keys = metrics.map(function (metric) {
+                            if (hiddenNames.hasOwnProperty(metric)) {
+                                return groupName;
+                            }
                             return groupName + ": " + metric;
                         });
                         var vals = metrics.map(function (metric) {
