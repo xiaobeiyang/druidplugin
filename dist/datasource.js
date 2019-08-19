@@ -19,6 +19,12 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
             SPLITER = '\u001f';
             DruidDatasource = (function () {
                 function DruidDatasource(instanceSettings, $q, backendSrv, templateSrv) {
+                    this.agileGranularities = [
+                        { label: '10s', re: /^([0-9]+)(s)$/, prefix: 'PT' },
+                        { label: '1m', re: /^([0-9]+)(m)$/, prefix: 'PT' },
+                        { label: '1h', re: /^([0-9]+)(h)$/, prefix: 'PT' },
+                        { label: '1d', re: /^([0-9]+)(d)$/, prefix: 'P' }
+                    ];
                     this.GRANULARITIES = [
                         ['second', moment_1.default.duration(1, 'second')],
                         ['minute', moment_1.default.duration(1, 'minute')],
@@ -91,7 +97,19 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                         var granularity = target.shouldOverrideGranularity ?
                             _this.templateSrv.replace(target.customGranularity, options.scopedVars) :
                             _this.computeGranularity(from, to, maxDataPoints);
-                        var roundedFrom = granularity === "all" ? from : _this.roundUpStartTime(from, granularity);
+                        var arbitraryDigit = undefined;
+                        var arbitraryUnit = undefined;
+                        for (var _i = 0, _a = _this.agileGranularities; _i < _a.length; _i++) {
+                            var g = _a[_i];
+                            if (g.re.test(granularity)) {
+                                var matched = g.re.exec(granularity);
+                                granularity = { "type": "period", "period": "" + g.prefix + matched[0].toUpperCase() };
+                                arbitraryDigit = parseInt(matched[1]);
+                                arbitraryUnit = matched[2];
+                                break;
+                            }
+                        }
+                        var roundedFrom = granularity === "all" ? from : _this.roundUpStartTime(from, granularity, arbitraryDigit, arbitraryUnit);
                         if (_this.periodGranularity != "") {
                             if (granularity === 'day') {
                                 granularity = { "type": "period", "period": "P1D", "timeZone": _this.periodGranularity };
@@ -629,8 +647,9 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                     });
                     return granularityEntry[0];
                 };
-                DruidDatasource.prototype.roundUpStartTime = function (from, granularity) {
-                    var duration = lodash_1.default.find(this.GRANULARITIES, function (gEntry) {
+                DruidDatasource.prototype.roundUpStartTime = function (from, granularity, arbitraryDigit, arbitraryUnit) {
+                    var duration = (arbitraryDigit !== undefined && arbitraryUnit !== undefined) ?
+                        moment_1.default.duration(arbitraryDigit, arbitraryUnit) : lodash_1.default.find(this.GRANULARITIES, function (gEntry) {
                         return gEntry[0] === granularity;
                     })[1];
                     var rounded = null;

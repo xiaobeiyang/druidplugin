@@ -14,6 +14,11 @@ export default class DruidDatasource {
     basicAuth: any;
     supportMetrics: any;
     periodGranularity: any;
+    agileGranularities: {
+        label: string;
+        re: RegExp;
+        prefix: string;
+    }[];
     GRANULARITIES: any[][];
     filterTemplateExpanders: {
         "selector": string[];
@@ -71,7 +76,7 @@ export default class DruidDatasource {
     convertSelectDataToTimeSeries(data: any): any;
     dateToMoment(date: any, roundUp: any): any;
     computeGranularity(from: any, to: any, maxDataPoints: any): any;
-    roundUpStartTime(from: any, granularity: any): any;
+    roundUpStartTime(from: any, granularity: any, arbitraryDigit: any, arbitraryUnit: any): any;
     replaceTemplateValues(obj: any, scopedVars: any, attrList: any): any;
     arrayFormat(value: any): any;
 }
