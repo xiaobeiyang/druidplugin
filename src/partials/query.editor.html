@@ -508,21 +508,21 @@
     <input type="text" ng-switch-when="arithmetic" class="input-small gf-form-input" spellcheck="false" ng-model="ctrl.target.currentPostAggregator.name" placeholder="output name" ng-blur="ctrl.targetBlur()">
     <select ng-switch-when="arithmetic" class="input-small gf-form-input" ng-model="ctrl.target.currentPostAggregator.fn" ng-options="fn for fn in ctrl.arithmeticPostAggregator" ng-change="ctrl.targetBlur()"></select>
     <input type="text" ng-switch-when="arithmetic" class="input-small gf-form-input" spellcheck="false" bs-typeahead="ctrl.listAggregatorFields" data-min-length=0 ng-model="ctrl.target.currentPostAggregator.fieldsNames" placeholder="field1,field2" ng-blur="ctrl.targetBlur()">
-    <gf-form-switch ng-switch-when="arithmetic" class="gf-form input-medium" label="Name Hidden" label-class="query-keyword" checked="ctrl.target.currentPostAggregator.nameHidden"></gf-form-switch>
+    <gf-form-switch style="width: 500px" ng-switch-when="arithmetic" class="gf-form input-medium" label="Name Hidden" label-class="query-keyword" checked="ctrl.target.currentPostAggregator.nameHidden"></gf-form-switch>
   </div>
 
   <!-- max -->
   <div class="gf-form" ng-show="ctrl.addPostAggregatorMode" ng-switch on="ctrl.target.currentPostAggregator.type">
     <input type="text" ng-switch-when="max" class="input-small gf-form-input" spellcheck="false" ng-model="ctrl.target.currentPostAggregator.name" placeholder="output name" ng-blur="ctrl.targetBlur()">
     <input type="text" ng-switch-when="max" class="input-small gf-form-input" spellcheck="false" bs-typeahead="ctrl.listAggregatorFields" data-min-length=0 ng-model="ctrl.target.currentPostAggregator.fieldName" placeholder="agg name" ng-blur="ctrl.targetBlur()">
-    <gf-form-switch ng-switch-when="max" class="gf-form input-medium" label="Name Hidden" label-class="query-keyword" checked="ctrl.target.currentPostAggregator.nameHidden"></gf-form-switch>
+    <gf-form-switch style="width: 500px" ng-switch-when="max" class="gf-form input-medium" label="Name Hidden" label-class="query-keyword" checked="ctrl.target.currentPostAggregator.nameHidden"></gf-form-switch>
   </div>
 
   <!-- min -->
   <div class="gf-form" ng-show="ctrl.addPostAggregatorMode" ng-switch on="ctrl.target.currentPostAggregator.type">
     <input type="text" ng-switch-when="min" class="input-small gf-form-input" spellcheck="false" ng-model="ctrl.target.currentPostAggregator.name" placeholder="output name" ng-blur="ctrl.targetBlur()">
     <input type="text" ng-switch-when="min" class="input-small gf-form-input" spellcheck="false" bs-typeahead="ctrl.listAggregatorFields" data-min-length=0 ng-model="ctrl.target.currentPostAggregator.fieldName" placeholder="agg name" ng-blur="ctrl.targetBlur()">
-    <gf-form-switch ng-switch-when="min" class="gf-form input-medium" label="Name Hidden" label-class="query-keyword" checked="ctrl.target.currentPostAggregator.nameHidden"></gf-form-switch>
+    <gf-form-switch style="width: 500px" ng-switch-when="min" class="gf-form input-medium" label="Name Hidden" label-class="query-keyword" checked="ctrl.target.currentPostAggregator.nameHidden"></gf-form-switch>
   </div>
 
   <!-- quantile -->
@@ -530,7 +530,7 @@
     <input type="text" ng-switch-when="quantile" class="input-small gf-form-input" spellcheck="false" ng-model="ctrl.target.currentPostAggregator.name" placeholder="output name" ng-blur="ctrl.targetBlur()">
     <input type="text" ng-switch-when="quantile" class="input-small gf-form-input" spellcheck="false" ng-model="ctrl.target.currentPostAggregator.fieldName" placeholder="agg name" ng-blur="ctrl.targetBlur()">
     <input type="text" ng-switch-when="quantile" class="input-small gf-form-input" spellcheck="false" bs-typeahead="ctrl.listAggregatorFields" data-min-length=0 ng-model="ctrl.target.currentPostAggregator.probability" placeholder="probability" ng-blur="ctrl.targetBlur()">
-    <gf-form-switch ng-switch-when="quantile" class="gf-form input-medium" label="Name Hidden" label-class="query-keyword" checked="ctrl.target.currentPostAggregator.nameHidden"></gf-form-switch>
+    <gf-form-switch style="width: 500px" ng-switch-when="quantile" class="gf-form input-medium" label="Name Hidden" label-class="query-keyword" checked="ctrl.target.currentPostAggregator.nameHidden"></gf-form-switch>
   </div>
 
   <div class="gf-form" ng-show="ctrl.addPostAggregatorMode">
