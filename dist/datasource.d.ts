@@ -14,7 +14,7 @@ export default class DruidDatasource {
     basicAuth: any;
     supportMetrics: any;
     periodGranularity: any;
-    agileGranularities: {
+    arbitraryGranularities: {
         label: string;
         re: RegExp;
         prefix: string;

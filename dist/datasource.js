@@ -19,7 +19,7 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
             SPLITER = '\u001f';
             DruidDatasource = (function () {
                 function DruidDatasource(instanceSettings, $q, backendSrv, templateSrv) {
-                    this.agileGranularities = [
+                    this.arbitraryGranularities = [
                         { label: '10s', re: /^([0-9]+)(s)$/, prefix: 'PT' },
                         { label: '1m', re: /^([0-9]+)(m)$/, prefix: 'PT' },
                         { label: '1h', re: /^([0-9]+)(h)$/, prefix: 'PT' },
@@ -99,21 +99,23 @@ System.register(["lodash", "moment", "app/core/utils/datemath"], function (expor
                             _this.computeGranularity(from, to, maxDataPoints);
                         var arbitraryDigit = undefined;
                         var arbitraryUnit = undefined;
-                        for (var _i = 0, _a = _this.agileGranularities; _i < _a.length; _i++) {
+                        for (var _i = 0, _a = _this.arbitraryGranularities; _i < _a.length; _i++) {
                             var g = _a[_i];
                             if (g.re.test(granularity)) {
                                 var matched = g.re.exec(granularity);
-                                granularity = { "type": "period", "period": "" + g.prefix + matched[0].toUpperCase() };
+                                granularity = {
+                                    "type": "period",
+                                    "period": "" + g.prefix + matched[0].toUpperCase(),
+                                    "timeZone": matched[2] === "d" && _this.periodGranularity !== "" ? _this.periodGranularity : undefined
+                                };
                                 arbitraryDigit = parseInt(matched[1]);
                                 arbitraryUnit = matched[2];
                                 break;
                             }
                         }
                         var roundedFrom = granularity === "all" ? from : _this.roundUpStartTime(from, granularity, arbitraryDigit, arbitraryUnit);
-                        if (_this.periodGranularity != "") {
-                            if (granularity === 'day') {
-                                granularity = { "type": "period", "period": "P1D", "timeZone": _this.periodGranularity };
-                            }
+                        if (granularity === 'day' && _this.periodGranularity !== "") {
+                            granularity = { "type": "period", "period": "P1D", "timeZone": _this.periodGranularity };
                         }
                         if (typeof target.groupBy !== 'string') {
                             target.groupBy = '';

@@ -24,7 +24,7 @@ export default class DruidDatasource {
   basicAuth: any;
   supportMetrics: any;
   periodGranularity: any;
-  agileGranularities = [
+  arbitraryGranularities = [
     {label: '10s', re: /^([0-9]+)(s)$/, prefix: 'PT'},
     {label: '1m', re: /^([0-9]+)(m)$/, prefix: 'PT'},
     {label: '1h', re: /^([0-9]+)(h)$/, prefix: 'PT'},
@@ -108,10 +108,14 @@ export default class DruidDatasource {
         this.computeGranularity(from, to, maxDataPoints);
       let arbitraryDigit = undefined;
       let arbitraryUnit = undefined;
-      for (const g of this.agileGranularities) {
+      for (const g of this.arbitraryGranularities) {
         if (g.re.test(granularity)) {
             const matched = g.re.exec(granularity);
-            granularity = { "type": "period", "period": `${g.prefix}${matched[0].toUpperCase()}` };
+            granularity = {
+                "type": "period",
+                "period": `${g.prefix}${matched[0].toUpperCase()}`,
+                "timeZone": matched[2] === "d" && this.periodGranularity !== "" ? this.periodGranularity : undefined
+            };
             arbitraryDigit = parseInt(matched[1]);
             arbitraryUnit = matched[2];
             break;
@@ -120,14 +124,12 @@ export default class DruidDatasource {
       //Round up to start of an interval
       //Width of bar chars in Grafana is determined by size of the smallest interval
       const roundedFrom = granularity === "all" ? from : this.roundUpStartTime(from, granularity, arbitraryDigit, arbitraryUnit);
-      if (this.periodGranularity != "") {
-        if (granularity === 'day') {
-          granularity = { "type": "period", "period": "P1D", "timeZone": this.periodGranularity }
-        }
+      if (granularity === 'day' && this.periodGranularity !== "") {
+        granularity = { "type": "period", "period": "P1D", "timeZone": this.periodGranularity };
       }
       // ignore default groupBy of grafana
       if (typeof target.groupBy !== 'string') {
-        target.groupBy = ''
+        target.groupBy = '';
       }
       return this.doQuery(roundedFrom, to, granularity, target, options.scopedVars);
     });

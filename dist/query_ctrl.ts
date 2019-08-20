@@ -82,7 +82,7 @@ export class DruidQueryCtrl extends QueryCtrl {
     this.aggregatorTypes = _.keys(this.aggregatorValidators);
     this.postAggregatorTypes = _.keys(this.postAggregatorValidators);
     this.arithmeticPostAggregator = _.keys(this.arithmeticPostAggregatorFns);
-    this.customGranularity = this.datasource.agileGranularities.map(g=>g.label).concat(this.customGranularities);
+    this.customGranularity = this.datasource.arbitraryGranularities.map(g=>g.label).concat(this.customGranularities);
     this.resultFormats = [
         {text: 'Time series', value: 'time_series'},
         {text: 'Table', value: 'table'}

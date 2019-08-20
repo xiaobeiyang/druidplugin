@@ -77,7 +77,7 @@ System.register(["lodash", "app/plugins/sdk", "./css/query_editor.css!"], functi
                     _this.aggregatorTypes = lodash_1.default.keys(_this.aggregatorValidators);
                     _this.postAggregatorTypes = lodash_1.default.keys(_this.postAggregatorValidators);
                     _this.arithmeticPostAggregator = lodash_1.default.keys(_this.arithmeticPostAggregatorFns);
-                    _this.customGranularity = _this.datasource.agileGranularities.map(function (g) { return g.label; }).concat(_this.customGranularities);
+                    _this.customGranularity = _this.datasource.arbitraryGranularities.map(function (g) { return g.label; }).concat(_this.customGranularities);
                     _this.resultFormats = [
                         { text: 'Time series', value: 'time_series' },
                         { text: 'Table', value: 'table' }
